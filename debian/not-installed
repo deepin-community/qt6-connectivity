@@ -1,0 +1,4 @@
+usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/6.*
+usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/6.*
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/mkspecs/modules/qt_lib_bluetooth_private.pri
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/mkspecs/modules/qt_lib_nfc_private.pri

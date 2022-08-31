@@ -1,0 +1,10 @@
+# Lintian gives a false positive for the globbing order.
+# See https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=970274
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/bluetooth/btchat/doc/src/btchat.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/bluetooth/btscanner/doc/src/btscanner.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/bluetooth/heartrate-game/doc/src/heartrate-game.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/bluetooth/heartrate-server/doc/src/heartrate-server.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/bluetooth/lowenergyscanner/doc/src/lowenergyscanner.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/bluetooth/pingpong/doc/src/pingpong.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/nfc/annotatedurl/doc/src/annotatedurl.qdoc
+qt6-connectivity source: globbing-patterns-out-of-order debian/copyright examples/* *.qdoc examples/nfc/ndefeditor/doc/src/ndefeditor.qdoc
