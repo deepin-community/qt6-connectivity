@@ -1,6 +1,7 @@
 qt6-connectivity (6.2.4.1-1+dde) stable; urgency=medium
 
   * Adapt to V23.
+  * Update symbols. 
 
  -- Lu YaNing <luyaning@uniontech.com>  Sun, 09 Oct 2022 14:57:07 +0800
 
