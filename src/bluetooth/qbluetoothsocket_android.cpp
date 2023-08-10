@@ -1,48 +1,14 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Lauri Laanmets (Proekspert AS) <lauri.laanmets@eesti.ee>
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Lauri Laanmets (Proekspert AS) <lauri.laanmets@eesti.ee>
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothsocket.h"
 #include "qbluetoothsocket_android_p.h"
 #include "qbluetoothaddress.h"
 #include "qbluetoothdeviceinfo.h"
 #include "qbluetoothserviceinfo.h"
+#include "android/androidutils_p.h"
+#include "android/jni_android_p.h"
 #include <QCoreApplication>
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QThread>
@@ -53,9 +19,9 @@ QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
 
-#define FALLBACK_CHANNEL 1
 #define USE_FALLBACK true
 
+// ### Needs to be moved to qjniobject.h in qtbase
 Q_DECLARE_METATYPE(QJniObject)
 
 Q_BLUETOOTH_EXPORT bool useReverseUuidWorkAroundConnect = true;
@@ -177,9 +143,7 @@ QBluetoothSocketPrivateAndroid::QBluetoothSocketPrivateAndroid()
     inputThread(0)
 {
     secFlags = QBluetooth::Security::Secure;
-    adapter = QJniObject::callStaticObjectMethod("android/bluetooth/BluetoothAdapter",
-                                                        "getDefaultAdapter",
-                                                        "()Landroid/bluetooth/BluetoothAdapter;");
+    adapter = getDefaultBluetoothAdapter();
     qRegisterMetaType<QBluetoothSocket::SocketError>();
     qRegisterMetaType<QBluetoothSocket::SocketState>();
 }
@@ -199,104 +163,9 @@ bool QBluetoothSocketPrivateAndroid::ensureNativeSocket(QBluetoothServiceInfo::P
     return false;
 }
 
-bool QBluetoothSocketPrivateAndroid::fallBackConnect(QJniObject uuid, int channel)
-{
-    qCWarning(QT_BT_ANDROID) << "Falling back to getServiceChannel() workaround.";
-
-    QJniEnvironment env;
-
-    QJniObject remoteDeviceClass = remoteDevice.callObjectMethod("getClass", "()Ljava/lang/Class;");
-    if (!remoteDeviceClass.isValid()) {
-        qCWarning(QT_BT_ANDROID) << "Could not invoke BluetoothDevice.getClass.";
-        return false;
-    }
-
-    QJniObject integerObject = QJniObject::getStaticObjectField(
-                                            "java/lang/Integer", "TYPE", "Ljava/lang/Class;");
-    if (!integerObject.isValid()) {
-        qCWarning(QT_BT_ANDROID) << "Could not get Integer.TYPE";
-        return false;
-    }
-
-    jclass classClass = env.findClass("java/lang/Class");
-    jobjectArray rawArray = env->NewObjectArray(1, classClass,
-                                                integerObject.object<jobject>());
-    QJniObject paramTypes(rawArray);
-    env->DeleteLocalRef(rawArray);
-    if (!paramTypes.isValid()) {
-        qCWarning(QT_BT_ANDROID) << "Could not create new Class[]{Integer.TYPE}";
-        return false;
-    }
-
-    QJniObject parcelUuid("android/os/ParcelUuid", "(Ljava/util/UUID;)V",
-                                 uuid.object());
-    if (parcelUuid.isValid()) {
-        auto methodId = env.findMethod(remoteDevice.objectClass(), "getServiceChannel",
-                                         "(Landroid/os/ParcelUuid;)I");
-        jint socketChannel = 0;
-        if (methodId) {
-            socketChannel = env->CallIntMethod(remoteDevice.object(), methodId, parcelUuid.object());
-            if (!env.checkAndClearExceptions()) {
-                if (socketChannel
-                    == remoteDevice.getStaticField<jint>("android/bluetooth/BluetoothDevice", "ERROR")
-                    || socketChannel == -1) {
-                    qCWarning(QT_BT_ANDROID) << "Cannot determine RFCOMM service channel.";
-                } else {
-                    qCWarning(QT_BT_ANDROID) << "Using found rfcomm channel" << socketChannel;
-                    channel = socketChannel;
-                }
-            }
-        }
-    }
-    QJniObject method;
-    if (secFlags == QBluetooth::SecurityFlags(QBluetooth::Security::NoSecurity)) {
-        qCDebug(QT_BT_ANDROID) << "Connnecting via insecure rfcomm";
-        method = remoteDeviceClass.callObjectMethod(
-                "getMethod",
-                "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;",
-                QJniObject::fromString(QLatin1String("createInsecureRfcommSocket")).object<jstring>(),
-                paramTypes.object<jobjectArray>());
-    } else {
-        qCDebug(QT_BT_ANDROID) << "Connnecting via secure rfcomm";
-        method = remoteDeviceClass.callObjectMethod(
-                "getMethod",
-                "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;",
-                QJniObject::fromString(QLatin1String("createRfcommSocket")).object<jstring>(),
-                paramTypes.object<jobjectArray>());
-    }
-    if (!method.isValid()) {
-        qCWarning(QT_BT_ANDROID) << "Could not invoke getMethod";
-        return false;
-    }
-
-    jclass objectClass = env.findClass("java/lang/Object");
-    QJniObject channelObject = QJniObject::callStaticObjectMethod(
-                                        "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", channel);
-    rawArray = env->NewObjectArray(1, objectClass, channelObject.object<jobject>());
-
-    QJniObject invokeResult = method.callObjectMethod("invoke",
-                                         "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;",
-                                         remoteDevice.object<jobject>(), rawArray);
-    env->DeleteLocalRef(rawArray);
-    if (!invokeResult.isValid())
-    {
-        qCWarning(QT_BT_ANDROID) << "Invoke Resulted with error.";
-        return false;
-    }
-
-    socketObject = QJniObject(invokeResult);
-
-    WorkerThread *workerThread = new WorkerThread();
-    workerThread->setupWorker(this, socketObject, uuid, USE_FALLBACK);
-    workerThread->start();
-    emit connectJavaSocket();
-
-    qCWarning(QT_BT_ANDROID) << "Workaround thread invoked.";
-    return true;
-}
-
 /*
- * Workaround for QTBUG-61392
+ * Workaround for QTBUG-61392. If the underlying Android bug gets fixed,
+ * we need to consider restoring the non-reversed fallbackConnect from the repository.
  */
 bool QBluetoothSocketPrivateAndroid::fallBackReversedConnect(const QBluetoothUuid &uuid)
 {
@@ -311,20 +180,20 @@ bool QBluetoothSocketPrivateAndroid::fallBackReversedConnect(const QBluetoothUui
 
     QJniEnvironment env;
     const QJniObject inputString = QJniObject::fromString(tempUuid);
-    const QJniObject uuidObject = QJniObject::callStaticObjectMethod("java/util/UUID", "fromString",
-                                                                       "(Ljava/lang/String;)Ljava/util/UUID;",
-                                                                       inputString.object<jstring>());
+    const QJniObject uuidObject = QJniObject::callStaticMethod<QtJniTypes::UUID>(
+                QtJniTypes::className<QtJniTypes::UUID>(), "fromString",
+                inputString.object<jstring>());
 
     if (secFlags == QBluetooth::SecurityFlags(QBluetooth::Security::NoSecurity)) {
-        qCDebug(QT_BT_ANDROID) << "Connnecting via insecure rfcomm";
-        socketObject = remoteDevice.callObjectMethod("createInsecureRfcommSocketToServiceRecord",
-                                                 "(Ljava/util/UUID;)Landroid/bluetooth/BluetoothSocket;",
-                                                 uuidObject.object<jobject>());
+        qCDebug(QT_BT_ANDROID) << "Connecting via insecure rfcomm";
+        socketObject = remoteDevice.callMethod<QtJniTypes::BluetoothSocket>(
+                                    "createInsecureRfcommSocketToServiceRecord",
+                                    uuidObject.object<QtJniTypes::UUID>());
     } else {
-        qCDebug(QT_BT_ANDROID) << "Connnecting via secure rfcomm";
-        socketObject = remoteDevice.callObjectMethod("createRfcommSocketToServiceRecord",
-                                                     "(Ljava/util/UUID;)Landroid/bluetooth/BluetoothSocket;",                                       
-                                                     uuidObject.object<jobject>());
+        qCDebug(QT_BT_ANDROID) << "Connecting via secure rfcomm";
+        socketObject = remoteDevice.callMethod<QtJniTypes::BluetoothSocket>(
+                                    "createRfcommSocketToServiceRecord",
+                                    uuidObject.object<QtJniTypes::UUID>());
     }
 
     if (!socketObject.isValid()) {
@@ -352,14 +221,13 @@ bool QBluetoothSocketPrivateAndroid::fallBackReversedConnect(const QBluetoothUui
  * 3. if threaded connect succeeds call socketConnectSuccess() via signals
  *      -> done
  * 4. if threaded connect fails call defaultSocketConnectFailed() via signals
- * 5. call fallBackConnect() if Android version 22 or below
- *     -> Android 23+ complete failure of entire connectToServiceHelper()
- * 6. call fallBackReversedConnect() if Android version 23 or above
+ * 5. call fallBackReversedConnect()
  *     -> if failure entire connectToServiceHelper() fails
- * 7. if threaded connect on one of above fallbacks succeeds call socketConnectSuccess()
+ *     Note: This fallback can be disabled with private API boolean
+ * 6. if threaded connect on one of above fallbacks succeeds call socketConnectSuccess()
  *    via signals
  *      -> done
- * 8. if threaded connect on fallback channel fails call fallbackSocketConnectFailed()
+ * 7. if threaded connect on fallback channel fails call fallbackSocketConnectFailed()
  *      -> complete failure of entire connectToServiceHelper()
  * */
 void QBluetoothSocketPrivateAndroid::connectToServiceHelper(const QBluetoothAddress &address,
@@ -370,6 +238,15 @@ void QBluetoothSocketPrivateAndroid::connectToServiceHelper(const QBluetoothAddr
     Q_UNUSED(openMode);
 
     qCDebug(QT_BT_ANDROID) << "connectToServiceHelper()" << address.toString() << uuid.toString();
+
+    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+        qCWarning(QT_BT_ANDROID) << "Bluetooth socket connect failed due to missing permissions";
+        errorString = QBluetoothSocket::tr(
+                "Bluetooth socket connect failed due to missing permissions.");
+        q->setSocketError(QBluetoothSocket::SocketError::MissingPermissionsError);
+        q->setSocketState(QBluetoothSocket::SocketState::UnconnectedState);
+        return;
+    }
 
     q->setSocketState(QBluetoothSocket::SocketState::ConnectingState);
 
@@ -383,7 +260,7 @@ void QBluetoothSocketPrivateAndroid::connectToServiceHelper(const QBluetoothAddr
 
     const int state = adapter.callMethod<jint>("getState");
     if (state != 12 ) { //BluetoothAdapter.STATE_ON
-        qCWarning(QT_BT_ANDROID) << "Bt device offline";
+        qCWarning(QT_BT_ANDROID) << "Bluetooth device offline";
         errorString = QBluetoothSocket::tr("Device is powered off");
         q->setSocketError(QBluetoothSocket::SocketError::NetworkError);
         q->setSocketState(QBluetoothSocket::SocketState::UnconnectedState);
@@ -392,8 +269,7 @@ void QBluetoothSocketPrivateAndroid::connectToServiceHelper(const QBluetoothAddr
 
     QJniEnvironment env;
     QJniObject inputString = QJniObject::fromString(address.toString());
-    remoteDevice = adapter.callObjectMethod("getRemoteDevice",
-                                            "(Ljava/lang/String;)Landroid/bluetooth/BluetoothDevice;",
+    remoteDevice = adapter.callMethod<QtJniTypes::BluetoothDevice>("getRemoteDevice",
                                             inputString.object<jstring>());
     if (!remoteDevice.isValid()) {
         errorString = QBluetoothSocket::tr("Cannot access address %1", "%1 = Bt address e.g. 11:22:33:44:55:66").arg(address.toString());
@@ -403,25 +279,23 @@ void QBluetoothSocketPrivateAndroid::connectToServiceHelper(const QBluetoothAddr
     }
 
     //cut leading { and trailing } {xxx-xxx}
-    QString tempUuid = uuid.toString();
-    tempUuid.chop(1); //remove trailing '}'
-    tempUuid.remove(0, 1); //remove first '{'
+    const QString tempUuid = uuid.toString(QUuid::WithoutBraces);
 
     inputString = QJniObject::fromString(tempUuid);
-    QJniObject uuidObject = QJniObject::callStaticObjectMethod("java/util/UUID", "fromString",
-                                                                       "(Ljava/lang/String;)Ljava/util/UUID;",
-                                                                       inputString.object<jstring>());
+    const QJniObject uuidObject = QJniObject::callStaticMethod<QtJniTypes::UUID>(
+                            QtJniTypes::className<QtJniTypes::UUID>(), "fromString",
+                            inputString.object<jstring>());
 
     if (secFlags == QBluetooth::SecurityFlags(QBluetooth::Security::NoSecurity)) {
-        qCDebug(QT_BT_ANDROID) << "Connnecting via insecure rfcomm";
-        socketObject = remoteDevice.callObjectMethod("createInsecureRfcommSocketToServiceRecord",
-                                                    "(Ljava/util/UUID;)Landroid/bluetooth/BluetoothSocket;",
-                                                    uuidObject.object<jobject>());
+        qCDebug(QT_BT_ANDROID) << "Connecting via insecure rfcomm";
+        socketObject = remoteDevice.callMethod<QtJniTypes::BluetoothSocket>(
+                                    "createInsecureRfcommSocketToServiceRecord",
+                                    uuidObject.object<QtJniTypes::UUID>());
     } else {
-        qCDebug(QT_BT_ANDROID) << "Connnecting via secure rfcomm";
-        socketObject = remoteDevice.callObjectMethod("createRfcommSocketToServiceRecord",
-                                                     "(Ljava/util/UUID;)Landroid/bluetooth/BluetoothSocket;",
-                                                     uuidObject.object<jobject>());
+        qCDebug(QT_BT_ANDROID) << "Connecting via secure rfcomm";
+        socketObject = remoteDevice.callMethod<QtJniTypes::BluetoothSocket>(
+                                    "createRfcommSocketToServiceRecord",
+                                    uuidObject.object<QtJniTypes::UUID>());
     }
 
     if (!socketObject.isValid()) {
@@ -544,8 +418,8 @@ void QBluetoothSocketPrivateAndroid::socketConnectSuccess(const QJniObject &sock
         inputThread = 0;
     }
 
-    inputStream = socketObject.callObjectMethod("getInputStream", "()Ljava/io/InputStream;");
-    outputStream = socketObject.callObjectMethod("getOutputStream", "()Ljava/io/OutputStream;");
+    inputStream = socketObject.callMethod<QtJniTypes::InputStream>("getInputStream");
+    outputStream = socketObject.callMethod<QtJniTypes::OutputStream>("getOutputStream");
 
     if (!inputStream.isValid() || !outputStream.isValid()) {
 
@@ -590,6 +464,7 @@ void QBluetoothSocketPrivateAndroid::defaultSocketConnectFailed(
         const QJniObject &socket, const QJniObject &targetUuid,
         const QBluetoothUuid &qtTargetUuid)
 {
+    Q_UNUSED(targetUuid);
     Q_Q(QBluetoothSocket);
 
     // test we didn't get a fail from a previous connect
@@ -597,18 +472,12 @@ void QBluetoothSocketPrivateAndroid::defaultSocketConnectFailed(
     if (socket != socketObject)
         return;
 
-    bool success = false;
-    if (QNativeInterface::QAndroidApplication::sdkVersion() <= 22)
-        success = fallBackConnect(targetUuid, FALLBACK_CHANNEL);
-    else if (useReverseUuidWorkAroundConnect) // version 23+ has Android bug (see QTBUG-61392)
-        success = fallBackReversedConnect(qtTargetUuid);
-
-    if (!success) {
+    if (!useReverseUuidWorkAroundConnect || !fallBackReversedConnect(qtTargetUuid)) {
         errorString = QBluetoothSocket::tr("Connection to service failed");
         socketObject = remoteDevice = QJniObject();
         q->setSocketError(QBluetoothSocket::SocketError::ServiceNotFoundError);
         q->setSocketState(QBluetoothSocket::SocketState::UnconnectedState);
-        qCWarning(QT_BT_ANDROID) << "Workaround failed";
+        qCWarning(QT_BT_ANDROID) << "Socket connect workaround failed";
     }
 }
 
@@ -677,8 +546,12 @@ void QBluetoothSocketPrivateAndroid::abort()
 
 QString QBluetoothSocketPrivateAndroid::localName() const
 {
-    if (adapter.isValid())
-        return adapter.callObjectMethod<jstring>("getName").toString();
+    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+        qCWarning(QT_BT_ANDROID) << "Bluetooth socket localName() failed due to"
+                                    "missing permissions";
+    } else if (adapter.isValid()) {
+        return adapter.callMethod<jstring>("getName").toString();
+    }
 
     return QString();
 }
@@ -686,8 +559,13 @@ QString QBluetoothSocketPrivateAndroid::localName() const
 QBluetoothAddress QBluetoothSocketPrivateAndroid::localAddress() const
 {
     QString result;
-    if (adapter.isValid())
-        result = adapter.callObjectMethod("getAddress", "()Ljava/lang/String;").toString();
+
+    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+        qCWarning(QT_BT_ANDROID) << "Bluetooth socket localAddress() failed due to"
+                                    "missing permissions";
+    } else if (adapter.isValid()) {
+        result = adapter.callMethod<jstring>("getAddress").toString();
+    }
 
     return QBluetoothAddress(result);
 }
@@ -703,7 +581,7 @@ QString QBluetoothSocketPrivateAndroid::peerName() const
     if (!remoteDevice.isValid())
         return QString();
 
-    return remoteDevice.callObjectMethod("getName", "()Ljava/lang/String;").toString();
+    return remoteDevice.callMethod<jstring>("getName").toString();
 }
 
 QBluetoothAddress QBluetoothSocketPrivateAndroid::peerAddress() const
@@ -711,9 +589,7 @@ QBluetoothAddress QBluetoothSocketPrivateAndroid::peerAddress() const
     if (!remoteDevice.isValid())
         return QBluetoothAddress();
 
-    const QString address = remoteDevice.callObjectMethod("getAddress",
-                                                          "()Ljava/lang/String;").toString();
-
+    const QString address = remoteDevice.callMethod<jstring>("getAddress").toString();
     return QBluetoothAddress(address);
 }
 
@@ -834,8 +710,8 @@ bool QBluetoothSocketPrivateAndroid::setSocketDescriptor(const QJniObject &socke
 
     socketObject = socket;
 
-    inputStream = socketObject.callObjectMethod("getInputStream", "()Ljava/io/InputStream;");
-    outputStream = socketObject.callObjectMethod("getOutputStream", "()Ljava/io/OutputStream;");
+    inputStream = socketObject.callMethod<QtJniTypes::InputStream>("getInputStream");
+    outputStream = socketObject.callMethod<QtJniTypes::OutputStream>("getOutputStream");
 
     if (!inputStream.isValid() || !outputStream.isValid()) {
 
@@ -851,7 +727,7 @@ bool QBluetoothSocketPrivateAndroid::setSocketDescriptor(const QJniObject &socke
         return false;
     }
 
-    remoteDevice = socketObject.callObjectMethod("getRemoteDevice", "()Landroid/bluetooth/BluetoothDevice;");
+    remoteDevice = socketObject.callMethod<QtJniTypes::BluetoothDevice>("getRemoteDevice");
 
     if (inputThread) {
         inputThread->deleteLater();
@@ -900,9 +776,6 @@ qint64 QBluetoothSocketPrivateAndroid::bytesToWrite() const
  */
 QBluetoothUuid QBluetoothSocketPrivateAndroid::reverseUuid(const QBluetoothUuid &serviceUuid)
 {
-    if (QNativeInterface::QAndroidApplication::sdkVersion() < 23)
-        return serviceUuid;
-
     if (serviceUuid.isNull())
         return QBluetoothUuid();
 

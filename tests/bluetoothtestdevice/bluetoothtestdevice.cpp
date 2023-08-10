@@ -1,52 +1,5 @@
-/***************************************************************************
-**
-** Copyright (C) 2021 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the examples of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:BSD$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** BSD License Usage
-** Alternatively, you may use this file under the terms of the BSD license
-** as follows:
-**
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
-**
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2021 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 #include <QBluetoothLocalDevice>
 #include <QLatin1String>
@@ -90,6 +43,27 @@ static const QLatin1String connectionCountCharUuid("9414ec2d-792f-46a2-a19e-186d
 
 static const QLatin1String mtuServiceUuid("9a9483eb-cf4f-4c32-9a6b-794238d5b483");
 static const QLatin1String mtuCharUuid("960d7e2a-a850-4a70-8064-cd74e9ccb6ff");
+
+static const QLatin1String repeatedWriteServiceUuid("72b12a31-98ea-406d-a89d-2c932d11ff67");
+static const QLatin1String repeatedWriteTargetCharUuid("2192ee43-6d17-4e78-b286-db2c3b696833");
+static const QLatin1String repeatedWriteNotifyCharUuid("b3f9d1a2-3d55-49c9-8b29-e09cec77ff86");
+
+static void establishNotifyOnWriteConnection(QLowEnergyService *svc)
+{
+    // Make sure that the value from the repeatedWriteTargetCharUuid
+    // characteristic is writted to the repeatedWriteNotifyCharUuid
+    // characteristic
+    Q_ASSERT(svc->serviceUuid() == QBluetoothUuid(repeatedWriteServiceUuid));
+    QObject::connect(svc, &QLowEnergyService::characteristicChanged, svc,
+                     [svc](const QLowEnergyCharacteristic &characteristic,
+                           const QByteArray &newValue)
+    {
+        if (characteristic.uuid() == QBluetoothUuid(repeatedWriteTargetCharUuid)) {
+            auto notifyChar = svc->characteristic(QBluetoothUuid(repeatedWriteNotifyCharUuid));
+            svc->writeCharacteristic(notifyChar, newValue);
+        }
+    });
+}
 
 int main(int argc, char *argv[])
 {
@@ -278,8 +252,62 @@ int main(int argc, char *argv[])
         serviceDefinitions << serviceData;
     }
 
+    {
+        // repeated characteristic write service
+        //
+        // This service offers an 8 bytes large characteristic which can
+        // be read and written. Once the value is updated, it writes the
+        // same value to the other characteristic, which notifies the client
+        // about its change. This way we can make sure that all write were
+        // successful and happened in the right order.
+        // We can't use one characteristics for writing and notification,
+        // because on most backends when the characteristics was written
+        // by the client, there will be no notification about it.
+        QLowEnergyServiceData serviceData;
+        serviceData.setType(QLowEnergyServiceData::ServiceTypePrimary);
+        serviceData.setUuid(QBluetoothUuid(repeatedWriteServiceUuid));
+
+        {
+            // The characteristics to be written by the client.
+            QLowEnergyCharacteristicData charData;
+            charData.setUuid(QBluetoothUuid(repeatedWriteTargetCharUuid));
+            QByteArray initialValue(8, 0);
+            charData.setValue(initialValue);
+            charData.setValueLength(8, 8);
+            charData.setProperties(QLowEnergyCharacteristic::PropertyType::Read
+                                   | QLowEnergyCharacteristic::PropertyType::Write);
+
+            serviceData.addCharacteristic(charData);
+        }
+        {
+            // The characteristics written by the server,
+            // it will send notifications to the client.
+            QLowEnergyCharacteristicData charData;
+            charData.setUuid(QBluetoothUuid(repeatedWriteNotifyCharUuid));
+            QByteArray initialValue(8, 0);
+            charData.setValue(initialValue);
+            charData.setValueLength(8, 8);
+            charData.setProperties(QLowEnergyCharacteristic::PropertyType::Read
+                                   | QLowEnergyCharacteristic::PropertyType::Write
+                                   | QLowEnergyCharacteristic::PropertyType::Notify);
+
+            const QLowEnergyDescriptorData clientConfig(
+                    QBluetoothUuid::DescriptorType::ClientCharacteristicConfiguration,
+                    QLowEnergyCharacteristic::CCCDDisable);
+            charData.addDescriptor(clientConfig);
+
+            serviceData.addCharacteristic(charData);
+        }
+
+        serviceDefinitions << serviceData;
+    }
+
 #ifndef Q_OS_IOS
     auto localAdapters = QBluetoothLocalDevice::allDevices();
+    if (localAdapters.isEmpty()) {
+        qWarning() << "Bluetoothtestdevice did not find a local adapter";
+        return EXIT_FAILURE;
+    }
     QBluetoothLocalDevice adapter(localAdapters.back().address());
     adapter.setHostMode(QBluetoothLocalDevice::HostDiscoverable);
 #endif // Q_OS_IOS
@@ -306,11 +334,25 @@ int main(int argc, char *argv[])
     const QScopedPointer<QLowEnergyController> leController(
             QLowEnergyController::createPeripheral());
 #endif // Q_OS_IOS
+
+    QObject::connect(leController.data(), &QLowEnergyController::errorOccurred,
+                     [](QLowEnergyController::Error error) {
+        qDebug() << "Bluetoothtestdevice QLowEnergyController errorOccurred:" << error;
+    });
+
+    QObject::connect(leController.data(), &QLowEnergyController::stateChanged,
+                     [](QLowEnergyController::ControllerState state) {
+        qDebug() << "Bluetoothtestdevice QLowEnergyController stateChanged:" << state;
+    });
+
+
     QList<QSharedPointer<QLowEnergyService>> services;
 
     for (const auto &serviceData : serviceDefinitions) {
         services.emplaceBack(leController->addService(serviceData));
     }
+
+    establishNotifyOnWriteConnection(services[5].get());
 
     leController->startAdvertising(QLowEnergyAdvertisingParameters(), advertisingData,
                                    advertisingData);
@@ -318,10 +360,11 @@ int main(int argc, char *argv[])
 
     auto reconnect = [&connectioncount, &leController, advertisingData, &services, serviceDefinitions]() {
         connectioncount++;
-        for (int i = 0; i < services.size(); ++i) {
+        for (qsizetype i = 0; i < services.size(); ++i) {
             services[i].reset(leController->addService(serviceDefinitions[i]));
         }
 
+        establishNotifyOnWriteConnection(services[5].get());
 
         {
             // set connection counter

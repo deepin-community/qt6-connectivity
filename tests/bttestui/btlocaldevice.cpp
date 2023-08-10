@@ -1,30 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include "btlocaldevice.h"
 #include <QCoreApplication>
@@ -94,11 +69,6 @@ BtLocalDevice::BtLocalDevice(QObject *parent)
         server = new QBluetoothServer(SOCKET_PROTOCOL, this);
         connect(server, &QBluetoothServer::newConnection, this, &BtLocalDevice::serverNewConnection);
         connect(server, &QBluetoothServer::errorOccurred, this, &BtLocalDevice::serverError);
-    } else {
-        deviceAgent = nullptr;
-        serviceAgent = nullptr;
-        socket = nullptr;
-        server = nullptr;
     }
 }
 
@@ -169,7 +139,7 @@ void BtLocalDevice::requestPairingUpdate(bool isPairing)
         localDevice->requestPairing(baddr, QBluetoothLocalDevice::Unpaired);
     }
 
-    for (int i = 0; i < foundTestServers.count(); i++) {
+    for (qsizetype i = 0; i < foundTestServers.size(); ++i) {
         if (isPairing)
             localDevice->requestPairing(foundTestServers.at(i).device().address(),
                                     QBluetoothLocalDevice::Paired);
@@ -228,7 +198,7 @@ void BtLocalDevice::deviceDiscovered(const QBluetoothDeviceInfo &info)
     if (info.serviceClasses() & QBluetoothDeviceInfo::InformationService)
         services += "Information|";
 
-    services.truncate(services.length()-1); //cut last '/'
+    services.truncate(services.size()-1); //cut last '/'
 
     qDebug() << "Found new device: " << info.name() << info.isValid() << info.address().toString()
                                      << info.rssi() << info.majorDeviceClass()
@@ -320,8 +290,8 @@ void BtLocalDevice::serviceDiscovered(const QBluetoothServiceInfo &info)
     bool matchingService =
             (info.serviceUuid() == QBluetoothUuid(QString(TEST_SERVICE_UUID)));
 #ifdef Q_OS_ANDROID
-    if (QNativeInterface::QAndroidApplication::sdkVersion() >= 23) //bug introduced by Android 6.0.1
-        matchingService = matchingService
+    // QTBUG-61392
+    matchingService = matchingService
             || (info.serviceUuid() == QBluetoothUuid(QString(TEST_REVERSE_SERVICE_UUID)));
 #endif
 
@@ -330,7 +300,7 @@ void BtLocalDevice::serviceDiscovered(const QBluetoothServiceInfo &info)
     {
         //This is here to detect the test server for SPP testing later on
         bool alreadyKnown = false;
-        for (const QBluetoothServiceInfo& found : qAsConst(foundTestServers)) {
+        for (const QBluetoothServiceInfo& found : std::as_const(foundTestServers)) {
             if (found.device().address() == info.device().address()) {
                 alreadyKnown = true;
                 break;
@@ -368,7 +338,7 @@ void BtLocalDevice::dumpServiceDiscovery()
         qDebug() << "Device Discovery active:" << deviceAgent->isActive();
         qDebug() << "Error:" << deviceAgent->error() << deviceAgent->errorString();
         const QList<QBluetoothDeviceInfo> list = deviceAgent->discoveredDevices();
-        qDebug() << "Discovered Devices:" << list.count();
+        qDebug() << "Discovered Devices:" << list.size();
 
         for (const QBluetoothDeviceInfo &info : list)
             qDebug() << info.name() << info.address().toString() << info.rssi();
@@ -377,14 +347,14 @@ void BtLocalDevice::dumpServiceDiscovery()
         qDebug() << "Service Discovery active:" << serviceAgent->isActive();
         qDebug() << "Error:" << serviceAgent->error() << serviceAgent->errorString();
         const QList<QBluetoothServiceInfo> list = serviceAgent->discoveredServices();
-        qDebug() << "Discovered Services:" << list.count();
+        qDebug() << "Discovered Services:" << list.size();
 
         for (const QBluetoothServiceInfo &i : list) {
             qDebug() << i.device().address().toString() << i.device().name() << i.serviceName();
         }
 
         qDebug() << "###### TestServer offered by:";
-        for (const QBluetoothServiceInfo& found : qAsConst(foundTestServers)) {
+        for (const QBluetoothServiceInfo& found : std::as_const(foundTestServers)) {
             qDebug() << found.device().name() << found.device().address().toString();
         }
     }
@@ -494,6 +464,7 @@ void BtLocalDevice::dumpSocketInformation()
             case QBluetoothSocket::SocketError::NetworkError: tmp += "NetworkError"; break;
             //case QBluetoothSocket::SocketError::OperationError: tmp+= "OperationError"; break;
             case QBluetoothSocket::SocketError::UnsupportedProtocolError: tmp += "UnsupportedProtocolError"; break;
+            case QBluetoothSocket::SocketError::MissingPermissionsError: tmp += "MissingPermissionsError"; break;
             default: tmp+= "Undefined"; break;
         }
 
@@ -522,7 +493,7 @@ void BtLocalDevice::readData()
             qDebug() << ">> peer(" << socket->peerName() << socket->peerAddress()
                      << socket->peerPort() << ") local("
                      << socket->localName() << socket->localAddress() << socket->localPort()
-                     << ")>>" << QString::fromUtf8(line.constData(), line.length());
+                     << ")>>" << QString::fromUtf8(line.constData(), line.size());
         }
     }
 }
@@ -684,7 +655,7 @@ void BtLocalDevice::clientSocketReadyRead()
 
     while (socket->canReadLine()) {
         const QByteArray line = socket->readLine().trimmed();
-        QString lineString = QString::fromUtf8(line.constData(), line.length());
+        QString lineString = QString::fromUtf8(line.constData(), line.size());
         qDebug() <<  ">>(" << server->serverAddress() << server->serverPort()  <<")>>"
                  << lineString;
 
@@ -719,7 +690,7 @@ void BtLocalDevice::dumpServerInformation()
 
         //server->setSecurityFlags(secFlag);
 
-        for (const QBluetoothSocket *client : qAsConst(serverSockets)) {
+        for (const QBluetoothSocket *client : std::as_const(serverSockets)) {
             qDebug() << "##" << client->localAddress().toString()
                      << client->localName() << client->localPort();
             qDebug() << "##" << client->peerAddress().toString()
@@ -735,6 +706,7 @@ void BtLocalDevice::dumpServerInformation()
             case QBluetoothSocket::SocketError::NetworkError: tmp += "NetworkError"; break;
             case QBluetoothSocket::SocketError::UnsupportedProtocolError: tmp += "UnsupportedProtocolError"; break;
             //case QBluetoothSocket::SocketError::OperationError: tmp+= "OperationError"; break;
+            case QBluetoothSocket::SocketError::MissingPermissionsError: tmp += "MissingPermissionsError"; break;
             default: tmp += QString::number(static_cast<int>(client->error())); break;
             }
 
@@ -748,7 +720,7 @@ void BtLocalDevice::dumpInformation()
     qDebug() << "###### default local device";
     dumpLocalDevice(localDevice);
     const QList<QBluetoothHostInfo> list = QBluetoothLocalDevice::allDevices();
-    qDebug() << "Found local devices: "  << list.count();
+    qDebug() << "Found local devices: "  << list.size();
     for (const QBluetoothHostInfo &info : list) {
         qDebug() << "    " << info.address().toString() << " " <<info.name();
     }

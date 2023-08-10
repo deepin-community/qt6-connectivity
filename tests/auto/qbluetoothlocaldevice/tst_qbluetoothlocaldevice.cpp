@@ -1,35 +1,11 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include <QtTest/QtTest>
 
 #include <QDebug>
 #include <QVariant>
+#include "../../shared/bttestutil_p.h"
 
 #include <private/qtbluetoothglobal_p.h>
 #include <qbluetoothaddress.h>
@@ -67,16 +43,19 @@ private slots:
     void tst_pairingStatus();
     void tst_pairDevice_data();
     void tst_pairDevice();
+    void tst_connectedDevices();
 
 private:
     QBluetoothAddress remoteDevice;
-    int numDevices = 0;
-    bool expectRemoteDevice;
+    qsizetype numDevices = 0;
+    bool expectRemoteDevice = false;
 };
 
 tst_QBluetoothLocalDevice::tst_QBluetoothLocalDevice()
-    : numDevices(QBluetoothLocalDevice::allDevices().count()), expectRemoteDevice(false)
 {
+    if (androidBluetoothEmulator())
+        return;
+    numDevices = QBluetoothLocalDevice::allDevices().size();
     const QString remote = qgetenv("BT_TEST_DEVICE");
     if (!remote.isEmpty()) {
         remoteDevice = QBluetoothAddress(remote);
@@ -85,16 +64,6 @@ tst_QBluetoothLocalDevice::tst_QBluetoothLocalDevice()
     } else {
         qWarning() << "Not using any remote device for testing. Set BT_TEST_DEVICE env to run manual tests involving a remote device";
     }
-
-    if (numDevices == 0)
-        return;
-
-    // start with host powered off
-    QBluetoothLocalDevice *device = new QBluetoothLocalDevice();
-    device->setHostMode(QBluetoothLocalDevice::HostPoweredOff);
-    delete device;
-    // wait for the device to switch bluetooth mode.
-    QTest::qWait(1000);
 }
 
 tst_QBluetoothLocalDevice::~tst_QBluetoothLocalDevice()
@@ -111,70 +80,101 @@ void tst_QBluetoothLocalDevice::initTestCase()
 
 void tst_QBluetoothLocalDevice::tst_powerOn()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
 #ifdef Q_OS_OSX
     QSKIP("Not possible on OS X");
 #endif
-#ifdef Q_OS_WIN
-    QSKIP("Not possible on Windows");
-#endif
+    if (numDevices == 0)
+        QSKIP("Skipping test due to missing Bluetooth device");
 
     QBluetoothLocalDevice localDevice;
+    if (localDevice.hostMode() != QBluetoothLocalDevice::HostPoweredOff) {
+        // Ensure device is OFF so we can test switching it ON
+        localDevice.setHostMode(QBluetoothLocalDevice::HostPoweredOff);
+        // On Android user may need to authorize the transition, hence a longer timeout
+        QTRY_VERIFY_WITH_TIMEOUT(localDevice.hostMode()
+                                 == QBluetoothLocalDevice::HostPoweredOff, 15000);
+        // Allow possible mode-change signal(s) to arrive (QTRY_COMPARE polls the
+        // host mode in a loop, and thus may return before the host mode change signal)
+        QTest::qWait(1000);
+    }
 
     QSignalSpy hostModeSpy(&localDevice, SIGNAL(hostModeStateChanged(QBluetoothLocalDevice::HostMode)));
     // there should be no changes yet
     QVERIFY(hostModeSpy.isValid());
     QVERIFY(hostModeSpy.isEmpty());
 
-    if (numDevices == 0)
-        QSKIP("Skipping test due to missing Bluetooth device");
-
     localDevice.powerOn();
-    // async, wait for it
-    QTRY_VERIFY(hostModeSpy.count() > 0);
-    QBluetoothLocalDevice::HostMode hostMode= localDevice.hostMode();
-    // we should not be powered off
-    QVERIFY(hostMode == QBluetoothLocalDevice::HostConnectable
-         || hostMode == QBluetoothLocalDevice::HostDiscoverable);
+    // On Android user may need to authorize the transition => longer timeout.
+    QTRY_VERIFY_WITH_TIMEOUT(!hostModeSpy.isEmpty(), 15000);
+    QVERIFY(localDevice.hostMode()
+                             != QBluetoothLocalDevice::HostPoweredOff);
 }
 
 void tst_QBluetoothLocalDevice::tst_powerOff()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
 #ifdef Q_OS_OSX
     QSKIP("Not possible on OS X");
 #endif
-#ifdef Q_OS_WIN
-    QSKIP("Not possible on Windows");
-#endif
-
     if (numDevices == 0)
         QSKIP("Skipping test due to missing Bluetooth device");
 
-    {
-        QBluetoothLocalDevice *device = new QBluetoothLocalDevice();
-        device->powerOn();
-        delete device;
-        // wait for the device to switch bluetooth mode.
+    QBluetoothLocalDevice localDevice;
+    if (localDevice.hostMode() == QBluetoothLocalDevice::HostPoweredOff) {
+        // Ensure device is ON so we can test switching it OFF
+        localDevice.powerOn();
+        // On Android user may need to authorize the transition => longer timeout.
+        QTRY_VERIFY_WITH_TIMEOUT(localDevice.hostMode()
+                                 != QBluetoothLocalDevice::HostPoweredOff, 15000);
+        // Allow possible mode-change signal(s) to arrive (QTRY_COMPARE polls the
+        // host mode in a loop, and thus may return before the host mode change signal)
         QTest::qWait(1000);
     }
-    QBluetoothLocalDevice localDevice;
+
     QSignalSpy hostModeSpy(&localDevice, SIGNAL(hostModeStateChanged(QBluetoothLocalDevice::HostMode)));
     // there should be no changes yet
     QVERIFY(hostModeSpy.isValid());
     QVERIFY(hostModeSpy.isEmpty());
 
     localDevice.setHostMode(QBluetoothLocalDevice::HostPoweredOff);
-    // async, wait for it
-    QTRY_VERIFY(hostModeSpy.count() > 0);
-    // we should not be powered off
-    QVERIFY(localDevice.hostMode() == QBluetoothLocalDevice::HostPoweredOff);
-
+    // On Android user may need to authorize the transition => longer timeout.
+    QTRY_VERIFY_WITH_TIMEOUT(!hostModeSpy.isEmpty(), 15000);
+    QVERIFY(localDevice.hostMode()
+                             == QBluetoothLocalDevice::HostPoweredOff);
 }
 
 void tst_QBluetoothLocalDevice::tst_hostModes_data()
 {
     QTest::addColumn<QBluetoothLocalDevice::HostMode>("hostModeExpected");
     QTest::addColumn<bool>("expectSignal");
-
+#if defined(Q_OS_WIN)
+    // On Windows local device does not support HostDiscoverable as a separate mode
+    QTest::newRow("HostPoweredOff1") << QBluetoothLocalDevice::HostPoweredOff << false;
+    QTest::newRow("HostConnectable1") << QBluetoothLocalDevice::HostConnectable << true;
+    QTest::newRow("HostConnectable2") << QBluetoothLocalDevice::HostConnectable << false;
+    QTest::newRow("HostPoweredOff3") << QBluetoothLocalDevice::HostPoweredOff << true;
+    QTest::newRow("HostPoweredOff3") << QBluetoothLocalDevice::HostPoweredOff << false;
+    return;
+#elif defined(Q_OS_ANDROID)
+    if (QNativeInterface::QAndroidApplication::sdkVersion() >= 31) {
+        // On Android-12 (API Level 31+) it seems the device's bluetooth visibility setting
+        // defines if we enter "HostDiscoverable" (visible true) or "HostConnectable"
+        // (visible false). Here we assume that the visibility setting is true. For lower
+        // Android versions the default testdata rows are fine
+        qDebug() << "On this Android version the bluetooth visibility setting is assumed true";
+        QTest::newRow("HostDiscoverable1") << QBluetoothLocalDevice::HostDiscoverable << true;
+        QTest::newRow("HostPoweredOff1") << QBluetoothLocalDevice::HostPoweredOff << true;
+        QTest::newRow("HostPoweredOff2") << QBluetoothLocalDevice::HostPoweredOff << false;
+        QTest::newRow("HostDiscoverable2") << QBluetoothLocalDevice::HostDiscoverable << true;
+        QTest::newRow("HostPoweredOff3") << QBluetoothLocalDevice::HostPoweredOff << true;
+        QTest::newRow("HostDiscoverable3") << QBluetoothLocalDevice::HostDiscoverable << true;
+        QTest::newRow("HostDiscoverable4") << QBluetoothLocalDevice::HostDiscoverable << false;
+        return;
+    }
+#endif
     QTest::newRow("HostDiscoverable1") << QBluetoothLocalDevice::HostDiscoverable << true;
     QTest::newRow("HostPoweredOff1") << QBluetoothLocalDevice::HostPoweredOff << true;
     QTest::newRow("HostPoweredOff2") << QBluetoothLocalDevice::HostPoweredOff << false;
@@ -190,13 +190,11 @@ void tst_QBluetoothLocalDevice::tst_hostModes_data()
 
 void tst_QBluetoothLocalDevice::tst_hostModes()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
 #ifdef Q_OS_OSX
     QSKIP("Not possible on OS X");
 #endif
-#ifdef Q_OS_WIN
-    QSKIP("Not possible on Windows");
-#endif
-
     QFETCH(QBluetoothLocalDevice::HostMode, hostModeExpected);
     QFETCH(bool, expectSignal);
 
@@ -204,31 +202,49 @@ void tst_QBluetoothLocalDevice::tst_hostModes()
         QSKIP("Skipping test due to missing Bluetooth device");
 
     QBluetoothLocalDevice localDevice;
-    QSignalSpy hostModeSpy(&localDevice, SIGNAL(hostModeStateChanged(QBluetoothLocalDevice::HostMode)));
+
+    static bool firstIteration = true;
+    if (firstIteration) {
+        // On the first iteration establish a known hostmode so that the test
+        // function can reliably test changes to it
+        firstIteration = false;
+        if (localDevice.hostMode() != QBluetoothLocalDevice::HostPoweredOff) {
+            localDevice.setHostMode(QBluetoothLocalDevice::HostPoweredOff);
+            // On Android user may need to authorize the transition => longer timeout.
+            QTRY_VERIFY_WITH_TIMEOUT(localDevice.hostMode()
+                                     == QBluetoothLocalDevice::HostPoweredOff, 15000);
+            // Allow possible mode-change signal(s) to arrive (QTRY_COMPARE polls the
+            // host mode in a loop, and thus may return before the host mode change signal).
+            QTest::qWait(1000);
+        }
+    }
+
+    QSignalSpy hostModeSpy(&localDevice,
+                           SIGNAL(hostModeStateChanged(QBluetoothLocalDevice::HostMode)));
     // there should be no changes yet
     QVERIFY(hostModeSpy.isValid());
     QVERIFY(hostModeSpy.isEmpty());
 
-    QTest::qWait(1000);
+    // Switch the bluetooth mode and verify it changes
     localDevice.setHostMode(hostModeExpected);
-    // wait for the device to switch bluetooth mode.
+    // Manual interaction may be needed (for example on Android you may
+    // need to authorize a permission) => hence a longer timeout.
+    // If you see a fail on Android here, please see the comment in _data()
+    QTRY_COMPARE_WITH_TIMEOUT(localDevice.hostMode(), hostModeExpected, 15000);
+    // Allow possible mode-change signal(s) to arrive (QTRY_COMPARE polls the
+    // host mode in a loop, and thus may return before the host mode change signal).
     QTest::qWait(1000);
-    if (hostModeExpected != localDevice.hostMode()) {
-        QTRY_VERIFY(hostModeSpy.count() > 0);
-    }
-    // test the actual signal values.
-    if (expectSignal)
-        QVERIFY(hostModeSpy.count() > 0);
-    else
-        QVERIFY(hostModeSpy.count() == 0);
 
+    // Verify that signals are as expected
     if (expectSignal) {
-        QList<QVariant> arguments = hostModeSpy.takeLast();
-        QBluetoothLocalDevice::HostMode hostMode = qvariant_cast<QBluetoothLocalDevice::HostMode>(arguments.at(0));
-        QCOMPARE(hostModeExpected, hostMode);
+        QVERIFY(hostModeSpy.size() > 0);
+        // Verify that the last signal contained the right mode
+        auto arguments = hostModeSpy.takeLast();
+        auto hostMode = qvariant_cast<QBluetoothLocalDevice::HostMode>(arguments.at(0));
+        QCOMPARE(hostMode, hostModeExpected);
+    } else {
+        QCOMPARE(hostModeSpy.size(), 0);
     }
-    // test actual
-    QCOMPARE(hostModeExpected, localDevice.hostMode());
 }
 
 void tst_QBluetoothLocalDevice::tst_address()
@@ -250,6 +266,8 @@ void tst_QBluetoothLocalDevice::tst_name()
 }
 void tst_QBluetoothLocalDevice::tst_isValid()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
 #if defined(Q_OS_MACOS) || QT_CONFIG(winrt_bt)
     // On OS X we can have a valid device (device.isValid() == true),
     // that has neither a name nor a valid address - this happens
@@ -262,10 +280,10 @@ void tst_QBluetoothLocalDevice::tst_isValid()
     QBluetoothAddress invalidAddress("FF:FF:FF:FF:FF:FF");
 
     const QList<QBluetoothHostInfo> devices = QBluetoothLocalDevice::allDevices();
-    if (devices.count()) {
+    if (!devices.isEmpty()) {
         QVERIFY(localDevice.isValid());
         bool defaultFound = false;
-        for (int i = 0; i<devices.count(); i++) {
+        for (qsizetype i = 0; i < devices.size(); ++i) {
             QVERIFY(devices.at(i).address() != invalidAddress);
             if (devices.at(i).address() == localDevice.address() ) {
                 defaultFound = true;
@@ -284,14 +302,8 @@ void tst_QBluetoothLocalDevice::tst_isValid()
     QVERIFY(!invalidLocalDevice.isValid());
     QCOMPARE(invalidLocalDevice.address(), QBluetoothAddress());
     QCOMPARE(invalidLocalDevice.name(), QString());
-#if !QT_CONFIG(winrt_bt)
     QCOMPARE(invalidLocalDevice.pairingStatus(QBluetoothAddress()), QBluetoothLocalDevice::Unpaired );
     QCOMPARE(invalidLocalDevice.hostMode(), QBluetoothLocalDevice::HostPoweredOff);
-#else
-    // When QTBUG-62294 is fixed, the pairingStatus part is consistent across platforms
-    QCOMPARE(invalidLocalDevice.pairingStatus(QBluetoothAddress()), QBluetoothLocalDevice::Paired);
-    QCOMPARE(invalidLocalDevice.hostMode(), QBluetoothLocalDevice::HostConnectable);
-#endif
 }
 
 void tst_QBluetoothLocalDevice::tst_allDevices()
@@ -357,13 +369,11 @@ void tst_QBluetoothLocalDevice::tst_pairDevice_data()
 
 void tst_QBluetoothLocalDevice::tst_pairDevice()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
 #if defined(Q_OS_MACOS)
     QSKIP("The pair device test fails on macOS");
 #endif
-#ifdef Q_OS_WIN
-    QSKIP("Programmatic pairing not supported on Windows");
-#endif
-
     QFETCH(QBluetoothAddress, deviceAddress);
     QFETCH(QBluetoothLocalDevice::Pairing, pairingExpected);
     QFETCH(int, pairingWaitTime);
@@ -374,8 +384,10 @@ void tst_QBluetoothLocalDevice::tst_pairDevice()
 
     QBluetoothLocalDevice localDevice;
     //powerOn if not already
-    localDevice.powerOn();
-    QVERIFY(localDevice.hostMode() != QBluetoothLocalDevice::HostPoweredOff);
+    if (localDevice.hostMode() == QBluetoothLocalDevice::HostPoweredOff) {
+        localDevice.powerOn();
+        QTRY_VERIFY(localDevice.hostMode() != QBluetoothLocalDevice::HostPoweredOff);
+    }
 
     QSignalSpy pairingSpy(&localDevice, SIGNAL(pairingFinished(QBluetoothAddress,QBluetoothLocalDevice::Pairing)) );
     QSignalSpy errorSpy(&localDevice, SIGNAL(errorOccurred(QBluetoothLocalDevice::Error)));
@@ -407,11 +419,75 @@ void tst_QBluetoothLocalDevice::tst_pairDevice()
         QBluetoothAddress address = qvariant_cast<QBluetoothAddress>(arguments.at(0));
         QBluetoothLocalDevice::Pairing pairingResult = qvariant_cast<QBluetoothLocalDevice::Pairing>(arguments.at(1));
         QCOMPARE(deviceAddress, address);
-        QCOMPARE(pairingExpected, pairingResult);
+        // Verify that the local device pairing status and the signal value match
+        QCOMPARE(pairingResult, localDevice.pairingStatus(deviceAddress));
+#ifndef Q_OS_WIN
+        // On Windows the resulting pairing mode may differ from test's "expected" as the
+        // decision is up to Windows.
+#ifdef Q_OS_ANDROID
+        // On Android we always use "Paired"
+        if (pairingExpected == QBluetoothLocalDevice::AuthorizedPaired)
+            pairingExpected = QBluetoothLocalDevice::Paired;
+#endif
+        QCOMPARE(pairingResult, pairingExpected);
+        QCOMPARE(localDevice.pairingStatus(deviceAddress), pairingExpected);
+#endif
+    }
+}
+
+void tst_QBluetoothLocalDevice::tst_connectedDevices()
+{
+#if defined(Q_OS_MACOS)
+    QSKIP("The connectedDevices test fails on macOS");
+#endif
+    if (numDevices == 0)
+        QSKIP("Skipping test due to missing Bluetooth device");
+    if (remoteDevice.isNull())
+        QSKIP("This test only makes sense with remote device");
+
+    QBluetoothLocalDevice localDevice;
+    // powerOn if not already
+    if (localDevice.hostMode() == QBluetoothLocalDevice::HostPoweredOff) {
+        localDevice.powerOn();
+        QTRY_VERIFY(localDevice.hostMode() != QBluetoothLocalDevice::HostPoweredOff);
     }
 
-    if (!expectErrorSignal)
-        QCOMPARE(pairingExpected, localDevice.pairingStatus(deviceAddress));
+    QSignalSpy pairingSpy(&localDevice, &QBluetoothLocalDevice::pairingFinished);
+
+    // Make sure that the remote device is not paired
+    localDevice.requestPairing(remoteDevice, QBluetoothLocalDevice::Unpaired);
+    QTRY_VERIFY(!pairingSpy.isEmpty());
+
+    QList<QBluetoothAddress> connectedDevices = localDevice.connectedDevices();
+    QVERIFY(!connectedDevices.contains(remoteDevice));
+
+    QSignalSpy deviceConnectedSpy(&localDevice, &QBluetoothLocalDevice::deviceConnected);
+    QSignalSpy deviceDisconnectedSpy(&localDevice, &QBluetoothLocalDevice::deviceDisconnected);
+
+    // Now pair with the device. We should have a deviceConnected signal.
+    pairingSpy.clear();
+    localDevice.requestPairing(remoteDevice, QBluetoothLocalDevice::Paired);
+    // Manual confirmation for pairing might be required
+    QTRY_VERIFY_WITH_TIMEOUT(!pairingSpy.isEmpty(), 30000);
+    QTRY_VERIFY(!deviceConnectedSpy.isEmpty());
+    QList<QVariant> arguments = deviceConnectedSpy.takeFirst();
+    auto address = arguments.at(0).value<QBluetoothAddress>();
+    QCOMPARE(address, remoteDevice);
+
+    connectedDevices = localDevice.connectedDevices();
+    QVERIFY(connectedDevices.contains(remoteDevice));
+
+    // Unpair again. We should have a deviceDisconnected signal.
+    pairingSpy.clear();
+    localDevice.requestPairing(remoteDevice, QBluetoothLocalDevice::Unpaired);
+    QTRY_VERIFY(!pairingSpy.isEmpty());
+    QTRY_VERIFY(!deviceDisconnectedSpy.isEmpty());
+    arguments = deviceDisconnectedSpy.takeFirst();
+    address = arguments.at(0).value<QBluetoothAddress>();
+    QCOMPARE(address, remoteDevice);
+
+    connectedDevices = localDevice.connectedDevices();
+    QVERIFY(!connectedDevices.contains(remoteDevice));
 }
 
 void tst_QBluetoothLocalDevice::tst_pairingStatus_data()
@@ -419,16 +495,9 @@ void tst_QBluetoothLocalDevice::tst_pairingStatus_data()
     QTest::addColumn<QBluetoothAddress>("deviceAddress");
     QTest::addColumn<QBluetoothLocalDevice::Pairing>("pairingExpected");
 
-#if !QT_CONFIG(winrt_bt)
     QTest::newRow("UnPaired Device: DUMMY") << QBluetoothAddress("11:00:00:00:00:00")
             << QBluetoothLocalDevice::Unpaired;
     QTest::newRow("Invalid device") << QBluetoothAddress() << QBluetoothLocalDevice::Unpaired;
-#else
-    // Remove special case when QTBUG-62294 is fixed
-    QTest::newRow("UnPaired Device: DUMMY") << QBluetoothAddress("11:00:00:00:00:00")
-        << QBluetoothLocalDevice::Paired;
-    QTest::newRow("Invalid device") << QBluetoothAddress() << QBluetoothLocalDevice::Paired;
-#endif
     //valid devices are already tested by tst_pairDevice()
 }
 

@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2021 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #ifndef LOWENERGYNOTIFICATIONHUB_H
 #define LOWENERGYNOTIFICATIONHUB_H
@@ -57,6 +21,8 @@
 #include <QtBluetooth/QBluetoothAddress>
 #include <QtBluetooth/QLowEnergyController>
 #include <QtBluetooth/QLowEnergyService>
+#include <QtCore/private/qglobal_p.h>
+#include "android/jni_android_p.h"
 #include <jni.h>
 
 #include <QtBluetooth/QLowEnergyCharacteristic>
@@ -73,36 +39,71 @@ public:
 
     static void lowEnergy_connectionChange(JNIEnv*, jobject, jlong qtObject,
                                            jint errorCode, jint newState);
-    static void lowEnergy_mtuChanged(JNIEnv*, jobject, jlong qtObject,
-                                           jint mtu);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_connectionChange,
+                                                 leConnectionStateChange)
+
+    static void lowEnergy_mtuChanged(JNIEnv*, jobject, jlong qtObject, jint mtu);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_mtuChanged, leMtuChanged)
+
     static void lowEnergy_servicesDiscovered(JNIEnv*, jobject, jlong qtObject,
-                                             jint errorCode, jobject uuidList);
+                                             jint errorCode, jstring uuidList);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_servicesDiscovered,
+                                                 leServicesDiscovered)
+
     static void lowEnergy_serviceDetailsDiscovered(JNIEnv *, jobject,
-                                                   jlong qtObject, jobject uuid,
+                                                   jlong qtObject, jstring uuid,
                                                    jint startHandle, jint endHandle);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_serviceDetailsDiscovered,
+                                                 leServiceDetailDiscoveryFinished)
+
     static void lowEnergy_characteristicRead(JNIEnv*env, jobject, jlong qtObject,
-                                             jobject serviceUuid,
-                                             jint handle, jobject charUuid,
+                                             jstring serviceUuid,
+                                             jint handle, jstring charUuid,
                                              jint properties, jbyteArray data);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_characteristicRead,
+                                                 leCharacteristicRead)
+
     static void lowEnergy_descriptorRead(JNIEnv *env, jobject, jlong qtObject,
-                                         jobject sUuid, jobject cUuid,
-                                         jint handle, jobject dUuid, jbyteArray data);
+                                         jstring sUuid, jstring cUuid,
+                                         jint handle, jstring dUuid, jbyteArray data);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_descriptorRead, leDescriptorRead)
+
     static void lowEnergy_characteristicWritten(JNIEnv *, jobject, jlong qtObject,
                                                 jint charHandle, jbyteArray data,
                                                 jint errorCode);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_characteristicWritten,
+                                                 leCharacteristicWritten)
+
     static void lowEnergy_descriptorWritten(JNIEnv *, jobject, jlong qtObject,
                                             jint descHandle, jbyteArray data,
                                             jint errorCode);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_descriptorWritten,
+                                                 leDescriptorWritten)
+
     static void lowEnergy_serverDescriptorWritten(JNIEnv *, jobject, jlong qtObject,
-                                                  jobject descriptor, jbyteArray newValue);
+                                                  QtJniTypes::BluetoothGattDescriptor descriptor,
+                                                  jbyteArray newValue);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_serverDescriptorWritten,
+                                                 leServerDescriptorWritten)
+
     static void lowEnergy_characteristicChanged(JNIEnv *, jobject, jlong qtObject,
                                                 jint charHandle, jbyteArray data);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_characteristicChanged,
+                                                 leCharacteristicChanged)
+
     static void lowEnergy_serverCharacteristicChanged(JNIEnv *, jobject, jlong qtObject,
-                                                jobject characteristic, jbyteArray newValue);
+                                            QtJniTypes::BluetoothGattCharacteristic characteristic,
+                                            jbyteArray newValue);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_serverCharacteristicChanged,
+                                                 leServerCharacteristicChanged)
+
     static void lowEnergy_serviceError(JNIEnv *, jobject, jlong qtObject,
                                        jint attributeHandle, int errorCode);
-    static void lowEnergy_advertisementError(JNIEnv *, jobject, jlong qtObject,
-                                               jint status);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_serviceError, leServiceError)
+
+    static void lowEnergy_advertisementError(JNIEnv *, jobject, jlong qtObject, jint status);
+    Q_DECLARE_JNI_NATIVE_METHOD_IN_CURRENT_SCOPE(lowEnergy_advertisementError,
+                                                 leServerAdvertisementError)
 
     QJniObject javaObject()
     {

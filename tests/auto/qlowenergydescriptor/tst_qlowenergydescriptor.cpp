@@ -1,31 +1,6 @@
-/***************************************************************************
-**
-** Copyright (C) 2016 BlackBerry Limited all rights reserved
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 BlackBerry Limited all rights reserved
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include <QtTest/QtTest>
 #include <QUuid>
@@ -75,16 +50,22 @@ tst_QLowEnergyDescriptor::~tst_QLowEnergyDescriptor()
 void tst_QLowEnergyDescriptor::initTestCase()
 {
     if (QBluetoothLocalDevice::allDevices().isEmpty()) {
-        qWarning("No remote device discovered.");
-
+        qWarning("No local adapter, not discovering remote devices");
         return;
     }
 
-    // start Bluetooth if not started
     QBluetoothLocalDevice device;
-    device.powerOn();
+    if (device.hostMode() == QBluetoothLocalDevice::HostPoweredOff) {
+        // Attempt to switch Bluetooth ON
+        device.powerOn();
+        QTest::qWait(1000);
+        if (device.hostMode() == QBluetoothLocalDevice::HostPoweredOff) {
+            qWarning("Bluetooth couldn't be switched ON, not discovering remote devices");
+            return;
+        }
+    }
 
-    // find an arbitrary low energy device in vincinity
+    // find an arbitrary low energy device in vicinity
     // find an arbitrary service with descriptor
 
     QBluetoothDeviceDiscoveryAgent *devAgent = new QBluetoothDeviceDiscoveryAgent(this);
@@ -101,16 +82,16 @@ void tst_QLowEnergyDescriptor::initTestCase()
     QVERIFY(spy.isEmpty());
 
     devAgent->start();
-    QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 0, 100000);
+    QTRY_VERIFY_WITH_TIMEOUT(spy.size() > 0, 100000);
 
     // find first service with descriptor
     QLowEnergyController *controller = nullptr;
-    for (const QBluetoothDeviceInfo& remoteDeviceInfo : qAsConst(remoteLeDeviceInfos)) {
+    for (const QBluetoothDeviceInfo& remoteDeviceInfo : std::as_const(remoteLeDeviceInfos)) {
         controller = QLowEnergyController::createCentral(remoteDeviceInfo, this);
         qDebug() << "Connecting to" << remoteDeviceInfo.address();
         controller->connectToDevice();
         QTRY_IMPL(controller->state() != QLowEnergyController::ConnectingState,
-                  26500)
+                  50000)
         if (controller->state() != QLowEnergyController::ConnectedState) {
             // any error and we skip
             delete controller;
@@ -121,8 +102,8 @@ void tst_QLowEnergyDescriptor::initTestCase()
         QSignalSpy discoveryFinishedSpy(controller, SIGNAL(discoveryFinished()));
         QSignalSpy stateSpy(controller, SIGNAL(stateChanged(QLowEnergyController::ControllerState)));
         controller->discoverServices();
-        QTRY_VERIFY_WITH_TIMEOUT(discoveryFinishedSpy.count() == 1, 10000);
-        QCOMPARE(stateSpy.count(), 2);
+        QTRY_VERIFY_WITH_TIMEOUT(discoveryFinishedSpy.size() == 1, 10000);
+        QCOMPARE(stateSpy.size(), 2);
         QCOMPARE(stateSpy.at(0).at(0).value<QLowEnergyController::ControllerState>(),
                  QLowEnergyController::DiscoveringState);
         QCOMPARE(stateSpy.at(1).at(0).value<QLowEnergyController::ControllerState>(),
@@ -239,14 +220,14 @@ void tst_QLowEnergyDescriptor::tst_assignCompare()
     QCOMPARE(target.uuid(), QBluetoothUuid());
     QCOMPARE(target.value(), QByteArray());
 
-    int index = 0;
+    qsizetype index = 0;
     bool valueFound = false;
     QList<QLowEnergyDescriptor> targets;
     const QList<QLowEnergyCharacteristic> chars = globalService->characteristics();
     for (const QLowEnergyCharacteristic &ch : chars) {
         if (!ch.descriptors().isEmpty()) {
            targets = ch.descriptors();
-           for (int i = 0; i < targets.size(); ++i) {
+           for (qsizetype i = 0; i < targets.size(); ++i) {
                // try to get a descriptor we can read
                if (targets[i].type() == QBluetoothUuid::DescriptorType::CharacteristicUserDescription) {
                    index = i;
@@ -312,7 +293,7 @@ void tst_QLowEnergyDescriptor::tst_assignCompare()
     QVERIFY(targets[index] != target);
     QVERIFY(target != targets[index]);
 
-    if (targets.count() >= 2) {
+    if (targets.size() >= 2) {
         QLowEnergyDescriptor second = targets[(index+1)%2];
         // at least two descriptors
         QVERIFY(!(targets[index] == second));

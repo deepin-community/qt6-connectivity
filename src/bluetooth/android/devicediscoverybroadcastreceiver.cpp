@@ -1,42 +1,6 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Lauri Laanmets (Proekspert AS) <lauri.laanmets@eesti.ee>
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Lauri Laanmets (Proekspert AS) <lauri.laanmets@eesti.ee>
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "android/devicediscoverybroadcastreceiver_p.h"
 #include <QCoreApplication>
@@ -64,7 +28,7 @@ Q_GLOBAL_STATIC(JCachedMinorTypes, cachedMinorTypes)
 
 static QBitArray initializeMinorCaches()
 {
-    const int numberOfMajorDeviceClasses = 11; // count QBluetoothDeviceInfo::MajorDeviceClass values
+    const qsizetype numberOfMajorDeviceClasses = 11; // count QBluetoothDeviceInfo::MajorDeviceClass values
 
     // switch below used to ensure that we notice additions to MajorDeviceClass enum
     const QBluetoothDeviceInfo::MajorDeviceClass classes = QBluetoothDeviceInfo::ComputerDevice;
@@ -92,23 +56,24 @@ Q_GLOBAL_STATIC_WITH_ARGS(QBitArray, initializedCacheTracker, (initializeMinorCa
 
 
 // class names
-static const char * const javaBluetoothDeviceClassName = "android/bluetooth/BluetoothDevice";
-static const char * const javaBluetoothClassDeviceMajorClassName = "android/bluetooth/BluetoothClass$Device$Major";
-static const char * const javaBluetoothClassDeviceClassName = "android/bluetooth/BluetoothClass$Device";
+static const char javaBluetoothDeviceClassName[] = "android/bluetooth/BluetoothDevice";
+static const char javaBluetoothClassDeviceMajorClassName[] = "android/bluetooth/BluetoothClass$Device$Major";
+static const char javaBluetoothClassDeviceClassName[] = "android/bluetooth/BluetoothClass$Device";
 
 // field names device type (LE vs classic)
-static const char * const javaDeviceTypeClassic = "DEVICE_TYPE_CLASSIC";
-static const char * const javaDeviceTypeDual = "DEVICE_TYPE_DUAL";
-static const char * const javaDeviceTypeLE = "DEVICE_TYPE_LE";
-static const char * const javaDeviceTypeUnknown = "DEVICE_TYPE_UNKNOWN";
+static const char javaDeviceTypeClassic[] = "DEVICE_TYPE_CLASSIC";
+static const char javaDeviceTypeDual[] = "DEVICE_TYPE_DUAL";
+static const char javaDeviceTypeLE[] = "DEVICE_TYPE_LE";
+static const char javaDeviceTypeUnknown[] = "DEVICE_TYPE_UNKNOWN";
 
 struct MajorClassJavaToQtMapping
 {
-    char const * javaFieldName;
-    QBluetoothDeviceInfo::MajorDeviceClass qtMajor;
+    const char javaFieldName[14];
+    QBluetoothDeviceInfo::MajorDeviceClass qtMajor : 16;
 };
+static_assert(sizeof(MajorClassJavaToQtMapping) == 16);
 
-static const MajorClassJavaToQtMapping majorMappings[] = {
+static constexpr MajorClassJavaToQtMapping majorMappings[] = {
     { "AUDIO_VIDEO", QBluetoothDeviceInfo::AudioVideoDevice },
     { "COMPUTER", QBluetoothDeviceInfo::ComputerDevice },
     { "HEALTH", QBluetoothDeviceInfo::HealthDevice },
@@ -120,12 +85,11 @@ static const MajorClassJavaToQtMapping majorMappings[] = {
     { "TOY", QBluetoothDeviceInfo::ToyDevice },
     { "UNCATEGORIZED", QBluetoothDeviceInfo::UncategorizedDevice },
     { "WEARABLE", QBluetoothDeviceInfo::WearableDevice },
-    { nullptr, QBluetoothDeviceInfo::UncategorizedDevice } //end of list
 };
 
 // QBluetoothDeviceInfo::MajorDeviceClass value plus 1 matches index
 // UncategorizedDevice shifts to index 0
-static const int minorIndexSizes[] = {
+static constexpr quint8 minorIndexSizes[] = {
   64,  // QBluetoothDevice::UncategorizedDevice
   61,  // QBluetoothDevice::MiscellaneousDevice
   18,  // QBluetoothDevice::ComputerDevice
@@ -250,6 +214,9 @@ enum ADType {
     ADType128BitUuidComplete = 0x07,
     ADTypeShortenedLocalName = 0x08,
     ADTypeCompleteLocalName = 0x09,
+    ADTypeServiceData16Bit = 0x16,
+    ADTypeServiceData32Bit = 0x20,
+    ADTypeServiceData128Bit = 0x21,
     ADTypeManufacturerSpecificData = 0xff,
     // .. more will be added when required
 };
@@ -303,12 +270,11 @@ QBluetoothDeviceInfo::MajorDeviceClass resolveAndroidMajorClass(jint javaType)
     if (it == cachedMajorTypes()->end()) {
         QJniEnvironment env;
         // precache all major device class fields
-        int i = 0;
         jint fieldValue;
         QBluetoothDeviceInfo::MajorDeviceClass result = QBluetoothDeviceInfo::UncategorizedDevice;
         auto clazz = env->FindClass(javaBluetoothClassDeviceMajorClassName);
-        while (majorMappings[i].javaFieldName != nullptr) {
-            auto fieldId = env->GetStaticFieldID(clazz, majorMappings[i].javaFieldName, "I");
+        for (const auto &majorMapping : majorMappings) {
+            auto fieldId = env->GetStaticFieldID(clazz, majorMapping.javaFieldName, "I");
             if (!env->ExceptionCheck())
                 fieldValue = env->GetStaticIntField(clazz, fieldId);
             if (env.checkAndClearExceptions()) {
@@ -317,13 +283,11 @@ QBluetoothDeviceInfo::MajorDeviceClass resolveAndroidMajorClass(jint javaType)
                 // add fallback value because field not readable
                 cachedMajorTypes()->insert(javaType, QBluetoothDeviceInfo::UncategorizedDevice);
             } else {
-                cachedMajorTypes()->insert(fieldValue, majorMappings[i].qtMajor);
+                cachedMajorTypes()->insert(fieldValue, majorMapping.qtMajor);
             }
 
             if (fieldValue == javaType)
-                result = majorMappings[i].qtMajor;
-
-            i++;
+                result = majorMapping.qtMajor;
         }
 
         return result;
@@ -354,7 +318,7 @@ void triggerCachingOfMinorsForMajor(QBluetoothDeviceInfo::MajorDeviceClass major
 {
     //qCDebug(QT_BT_ANDROID) << "Caching minor values for major" << major;
     int mappingIndex = mappingIndexForMajor(major);
-    int sizeIndex = minorIndexSizes[mappingIndex];
+    quint8 sizeIndex = minorIndexSizes[mappingIndex];
 
     while (minorMappings[sizeIndex].javaFieldName != nullptr) {
         jint fieldValue = QJniObject::getStaticField<jint>(
@@ -392,9 +356,9 @@ quint8 resolveAndroidMinorClass(QBluetoothDeviceInfo::MajorDeviceClass major, ji
 
 DeviceDiscoveryBroadcastReceiver::DeviceDiscoveryBroadcastReceiver(QObject* parent): AndroidBroadcastReceiver(parent)
 {
-    addAction(valueForStaticField(JavaNames::BluetoothDevice, JavaNames::ActionFound));
-    addAction(valueForStaticField(JavaNames::BluetoothAdapter, JavaNames::ActionDiscoveryStarted));
-    addAction(valueForStaticField(JavaNames::BluetoothAdapter, JavaNames::ActionDiscoveryFinished));
+    addAction(valueForStaticField<QtJniTypes::BluetoothDevice, JavaNames::ActionFound>());
+    addAction(valueForStaticField<QtJniTypes::BluetoothAdapter, JavaNames::ActionDiscoveryStarted>());
+    addAction(valueForStaticField<QtJniTypes::BluetoothAdapter, JavaNames::ActionDiscoveryFinished>());
 }
 
 // Runs in Java thread
@@ -404,35 +368,32 @@ void DeviceDiscoveryBroadcastReceiver::onReceive(JNIEnv *env, jobject context, j
     Q_UNUSED(env)
 
     QJniObject intentObject(intent);
-    const QString action = intentObject.callObjectMethod("getAction", "()Ljava/lang/String;").toString();
+    const QString action = intentObject.callMethod<jstring>("getAction").toString();
 
     qCDebug(QT_BT_ANDROID) << "DeviceDiscoveryBroadcastReceiver::onReceive() - event:" << action;
 
-    if (action == valueForStaticField(JavaNames::BluetoothAdapter,
-                                      JavaNames::ActionDiscoveryFinished).toString()) {
+    if (action == valueForStaticField<QtJniTypes::BluetoothAdapter,
+                                      JavaNames::ActionDiscoveryFinished>().toString()) {
         emit finished();
-    } else if (action == valueForStaticField(JavaNames::BluetoothAdapter,
-                                             JavaNames::ActionDiscoveryStarted).toString()) {
-
-    } else if (action == valueForStaticField(JavaNames::BluetoothDevice,
-                                             JavaNames::ActionFound).toString()) {
+    } else if (action == valueForStaticField<QtJniTypes::BluetoothAdapter,
+                                             JavaNames::ActionDiscoveryStarted>().toString()) {
+        emit discoveryStarted();
+    } else if (action == valueForStaticField<QtJniTypes::BluetoothDevice,
+                                             JavaNames::ActionFound>().toString()) {
         //get BluetoothDevice
-        QJniObject keyExtra = valueForStaticField(JavaNames::BluetoothDevice,
-                                                         JavaNames::ExtraDevice);
+        QJniObject keyExtra = valueForStaticField<QtJniTypes::BluetoothDevice,
+                                                  JavaNames::ExtraDevice>();
         const QJniObject bluetoothDevice =
-                intentObject.callObjectMethod("getParcelableExtra",
-                                              "(Ljava/lang/String;)Landroid/os/Parcelable;",
-                                              keyExtra.object<jstring>());
+                intentObject.callMethod<QtJniTypes::Parcelable>("getParcelableExtra",
+                                                                keyExtra.object<jstring>());
 
         if (!bluetoothDevice.isValid())
             return;
 
-        keyExtra = valueForStaticField(JavaNames::BluetoothDevice,
-                                       JavaNames::ExtraRssi);
+        keyExtra = valueForStaticField<QtJniTypes::BluetoothDevice,
+                                       JavaNames::ExtraRssi>();
         int rssi = intentObject.callMethod<jshort>("getShortExtra",
-                                                "(Ljava/lang/String;S)S",
-                                                keyExtra.object<jstring>(),
-                                                0);
+                                                   keyExtra.object<jstring>(), jshort(0));
 
         const QBluetoothDeviceInfo info = retrieveDeviceInfo(bluetoothDevice, rssi);
         if (info.isValid())
@@ -455,11 +416,12 @@ void DeviceDiscoveryBroadcastReceiver::onReceiveLeScan(
 
 QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const QJniObject &bluetoothDevice, int rssi, jbyteArray scanRecord)
 {
-    const QString deviceName = bluetoothDevice.callObjectMethod<jstring>("getName").toString();
-    const QBluetoothAddress deviceAddress(bluetoothDevice.callObjectMethod<jstring>("getAddress").toString());
+    const QString deviceName = bluetoothDevice.callMethod<jstring>("getName").toString();
+    const QBluetoothAddress deviceAddress(
+                bluetoothDevice.callMethod<jstring>("getAddress").toString());
+    const QJniObject bluetoothClass =
+            bluetoothDevice.callMethod<QtJniTypes::BluetoothClass>("getBluetoothClass");
 
-    const QJniObject bluetoothClass = bluetoothDevice.callObjectMethod("getBluetoothClass",
-                                                                        "()Landroid/bluetooth/BluetoothClass;");
     if (!bluetoothClass.isValid())
         return QBluetoothDeviceInfo();
 
@@ -474,24 +436,22 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
     // minor device class is 6 bits from index 2 - 7
     classType |= ((quint32(minorDeviceType) & 0x3f) << 2);
 
-    static QList<quint32> services;
-    if (services.count() == 0)
-        services << QBluetoothDeviceInfo::PositioningService
-                 << QBluetoothDeviceInfo::NetworkingService
-                 << QBluetoothDeviceInfo::RenderingService
-                 << QBluetoothDeviceInfo::CapturingService
-                 << QBluetoothDeviceInfo::ObjectTransferService
-                 << QBluetoothDeviceInfo::AudioService
-                 << QBluetoothDeviceInfo::TelephonyService
-                 << QBluetoothDeviceInfo::InformationService;
+    static constexpr quint32 services[] = {
+        QBluetoothDeviceInfo::PositioningService,
+        QBluetoothDeviceInfo::NetworkingService,
+        QBluetoothDeviceInfo::RenderingService,
+        QBluetoothDeviceInfo::CapturingService,
+        QBluetoothDeviceInfo::ObjectTransferService,
+        QBluetoothDeviceInfo::AudioService,
+        QBluetoothDeviceInfo::TelephonyService,
+        QBluetoothDeviceInfo::InformationService,
+    };
 
     // Matching BluetoothClass.Service values
     quint32 serviceResult = 0;
-    quint32 current = 0;
-    for (int i = 0; i < services.count(); i++) {
-        current = services.at(i);
+    for (quint32 current : services) {
         int androidId = (current << 16); // Android values shift by 2 bytes compared to Qt enums
-        if (bluetoothClass.callMethod<jboolean>("hasService", "(I)Z", androidId))
+        if (bluetoothClass.callMethod<jboolean>("hasService", androidId))
             serviceResult |= current;
     }
 
@@ -506,10 +466,10 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
         jboolean isCopy;
         jbyte *elems = env->GetByteArrayElements(scanRecord, &isCopy);
         const char *scanRecordBuffer = reinterpret_cast<const char *>(elems);
-        const int scanRecordLength = env->GetArrayLength(scanRecord);
+        const jsize scanRecordLength = env->GetArrayLength(scanRecord);
 
         QList<QBluetoothUuid> serviceUuids;
-        int i = 0;
+        jsize i = 0;
 
         // Spec 4.2, Vol 3, Part C, Chapter 11
         QString localName;
@@ -521,7 +481,7 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
             if (nBytes == 0)
                 break;
 
-            if ((i + nBytes) >= scanRecordLength)
+            if (i >= scanRecordLength - nBytes)
                 break;
 
             const int adType = scanRecordBuffer[i+1];
@@ -541,6 +501,25 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
             case ADType128BitUuidComplete:
                 foundService =
                     QBluetoothUuid(qToBigEndian<quint128>(qFromLittleEndian<quint128>(dataPtr)));
+                break;
+            case ADTypeServiceData16Bit:
+                if (nBytes >= 3) {
+                    info.setServiceData(QBluetoothUuid(qFromLittleEndian<quint16>(dataPtr)),
+                                        QByteArray(dataPtr + 2, nBytes - 3));
+                }
+                break;
+            case ADTypeServiceData32Bit:
+                if (nBytes >= 5) {
+                    info.setServiceData(QBluetoothUuid(qFromLittleEndian<quint32>(dataPtr)),
+                                        QByteArray(dataPtr + 4, nBytes - 5));
+                }
+                break;
+            case ADTypeServiceData128Bit:
+                if (nBytes >= 17) {
+                    info.setServiceData(QBluetoothUuid(qToBigEndian<quint128>(
+                                                qFromLittleEndian<quint128>(dataPtr))),
+                                        QByteArray(dataPtr + 16, nBytes - 17));
+                }
                 break;
             case ADTypeManufacturerSpecificData:
                 if (nBytes >= 3) {
@@ -578,18 +557,13 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
         env->ReleaseByteArrayElements(scanRecord, elems, JNI_ABORT);
     }
 
-    if (QNativeInterface::QAndroidApplication::sdkVersion() >= 18) {
-        auto methodId = env.findMethod(bluetoothDevice.objectClass(),
-                                       "getType",
-                                       "()I");
-        jint javaBtType = env->CallIntMethod(bluetoothDevice.object(), methodId);
-        if (!env.checkAndClearExceptions()) {
-            info.setCoreConfigurations(qtBtTypeForJavaBtType(javaBtType));
-        }
+    auto methodId = env.findMethod(bluetoothDevice.objectClass(), "getType", "()I");
+    jint javaBtType = env->CallIntMethod(bluetoothDevice.object(), methodId);
+    if (!env.checkAndClearExceptions()) {
+        info.setCoreConfigurations(qtBtTypeForJavaBtType(javaBtType));
     }
 
     return info;
 }
 
 QT_END_NAMESPACE
-

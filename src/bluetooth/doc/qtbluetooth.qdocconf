@@ -15,9 +15,6 @@ qhp.QtBluetooth.virtualFolder       = qtbluetooth
 qhp.QtBluetooth.indexTitle          = Qt Bluetooth
 qhp.QtBluetooth.indexRoot           =
 
-qhp.QtBluetooth.filterAttributes    = qtbluetooth $QT_VERSION qtrefdoc
-qhp.QtBluetooth.customFilters.Qt.name = QtBluetooth $QT_VERSION
-qhp.QtBluetooth.customFilters.Qt.filterAttributes = qtbluetooth $QT_VERSION
 qhp.QtBluetooth.subprojects         = overviews classes examples
 qhp.QtBluetooth.subprojects.classes.title = C++ Classes
 qhp.QtBluetooth.subprojects.classes.indexTitle = Qt Bluetooth C++ Classes
@@ -32,7 +29,7 @@ qhp.QtBluetooth.subprojects.examples.selectors = fake:example
 
 tagfile                 = ../../../doc/qtbluetooth/qtbluetooth.tags
 
-depends += qtcore qtdoc qtquick qtcmake qmake
+depends += qtcore qtgui qtwidgets qtdoc qtquick qtcmake qmake
 
 headerdirs  += ..
 
@@ -49,3 +46,6 @@ imagedirs   += images
 
 navigation.landingpage = "Qt Bluetooth"
 navigation.cppclassespage = "Qt Bluetooth C++ Classes"
+
+# Fail the documentation build if there are more warnings than the limit
+warninglimit = 0

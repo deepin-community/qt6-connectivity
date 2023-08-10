@@ -1,42 +1,6 @@
-/****************************************************************************
-**
-** Copyright (C) 2018 The Qt Company Ltd.
-** Copyright (C) 2016 BlackBerry Limited. All rights reserved.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2018 The Qt Company Ltd.
+// Copyright (C) 2016 BlackBerry Limited. All rights reserved.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothsocket.h"
 #if QT_CONFIG(bluez)
@@ -129,8 +93,10 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT)
                                     supported on this platform.
     \value OperationError           An operation was attempted while the socket was in a state
                                     that did not permit it.
-    \value RemoteHostClosedError    The remote host closed the connection. This value was
-                                    introduced by Qt 5.10.
+    \value [since 5.10] RemoteHostClosedError   The remote host closed the connection.
+    \value [since 6.4] MissingPermissionsError  The operating system requests
+                                                permissions which were not
+                                                granted by the user.
 */
 
 /*!
@@ -276,7 +242,7 @@ static QBluetoothSocketBasePrivate *createSocketPrivate()
 #elif defined(QT_WINRT_BLUETOOTH)
     return new QBluetoothSocketPrivateWinRT();
 #elif defined(QT_OSX_BLUETOOTH)
-    return new QBluetoothSocketPrivate();
+    return new QBluetoothSocketPrivateDarwin();
 #else
     return new QBluetoothSocketPrivateDummy();
 #endif
@@ -377,7 +343,7 @@ qint64 QBluetoothSocket::bytesToWrite() const
     \a service. If a connection is established, QBluetoothSocket enters ConnectedState and
     emits connected().
 
-    At any point, the socket can emit error() to signal that an error occurred.
+    At any point, the socket can emit errorOccurred() to signal that an error occurred.
 
     Note that most platforms require a pairing prior to connecting to the remote device. Otherwise
     the connection process may fail.
@@ -417,7 +383,7 @@ void QBluetoothSocket::connectToService(const QBluetoothServiceInfo &service, Op
     the \l ServiceLookupState and \l socketType() is always set to
     \l QBluetoothServiceInfo::RfcommProtocol.
 
-    At any point, the socket can emit error() to signal that an error occurred.
+    At any point, the socket can emit errorOccurred() to signal that an error occurred.
 
     Note that most platforms require a pairing prior to connecting to the remote device. Otherwise
     the connection process may fail.
@@ -438,7 +404,7 @@ void QBluetoothSocket::connectToService(const QBluetoothAddress &address, const 
     The socket first enters ConnectingState, and attempts to connect to \a address. If a
     connection is established, QBluetoothSocket enters ConnectedState and emits connected().
 
-    At any point, the socket can emit error() to signal that an error occurred.
+    At any point, the socket can emit errorOccurred() to signal that an error occurred.
 
     On Android and BlueZ (version 5.46 or above), a connection to a service can not be established using a port.
     Calling this function will emit a \l {QBluetoothSocket::SocketError::ServiceNotFoundError}{ServiceNotFoundError}.
@@ -596,7 +562,7 @@ void QBluetoothSocket::setSocketState(QBluetoothSocket::SocketState state)
 bool QBluetoothSocket::canReadLine() const
 {
     Q_D(const QBluetoothSocketBase);
-    return d->canReadLine();
+    return d->canReadLine() || QIODevice::canReadLine();
 }
 
 /*!
@@ -786,13 +752,20 @@ void QBluetoothSocket::close()
 }
 
 /*!
-  Set the socket to use \a socketDescriptor with a type of \a socketType,
-  which is in state, \a socketState, and mode, \a openMode.
+  \fn bool QBluetoothSocket::setSocketDescriptor(int socketDescriptor, QBluetoothServiceInfo::Protocol socketType, SocketState socketState, OpenMode openMode)
 
-  Returns true on success
+  Sets the socket to use \a socketDescriptor with a type of \a socketType,
+  which is in state \a socketState, and mode \a openMode.
+
+  The socket descriptor is owned by the QBluetoothSocket instance and may
+  be closed once finished.
+
+  Returns \c true on success.
 */
 
-
+// ### Qt 7 consider making this function private. The qbluetoothsocket_bluez backend is the
+// the only backend providing publicly accessible support for this. Other backends implement
+// similarly named, but private, overload
 bool QBluetoothSocket::setSocketDescriptor(int socketDescriptor, QBluetoothServiceInfo::Protocol socketType,
                                            SocketState socketState, OpenMode openMode)
 {

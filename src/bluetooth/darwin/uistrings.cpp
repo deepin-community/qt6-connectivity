@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "uistrings_p.h"
 
@@ -50,6 +14,7 @@ const char DD_INVALID_ADAPTER[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAg
 const char DD_IO[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Input Output Error");
 const char DD_NOTSUPPORTED[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Bluetooth LE is not supported");
 const char DD_UNKNOWN_ERROR[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Unknown error");
+const char DD_MISSING_PERMISSION[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Missing permission");
 const char DD_NOT_STARTED[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Cannot start device inquiry");
 const char DD_NOT_STARTED_LE[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Cannot start low energy device inquiry");
 const char DD_NOT_STOPPED[] = QT_TRANSLATE_NOOP("QBluetoothDeviceDiscoveryAgent", "Discovery cannot be stopped");
@@ -84,5 +49,6 @@ const char LEC_RDEV_NO_FOUND[] = QT_TRANSLATE_NOOP("QLowEnergyController", "Remo
 const char LEC_NO_LOCAL_DEV[] = QT_TRANSLATE_NOOP("QLowEnergyController", "Cannot find local adapter");
 const char LEC_IO_ERROR[] = QT_TRANSLATE_NOOP("QLowEnergyController", "Error occurred during connection I/O");
 const char LEC_UNKNOWN_ERROR[] = QT_TRANSLATE_NOOP("QLowEnergyController", "Unknown Error");
+const char LEC_MISSING_PERMISSION[] = QT_TRANSLATE_NOOP("QLowEnergyController", "Missing permission");
 
 QT_END_NAMESPACE

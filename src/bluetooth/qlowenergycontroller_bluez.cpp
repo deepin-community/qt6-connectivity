@@ -1,48 +1,12 @@
-/****************************************************************************
-**
-** Copyright (C) 2017 The Qt Company Ltd.
-** Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2017 The Qt Company Ltd.
+// Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "lecmaccalculator_p.h"
 #include "qlowenergycontroller_bluez_p.h"
 #include "qbluetoothsocketbase_p.h"
 #include "qbluetoothsocket_bluez_p.h"
-#include "qleadvertiser_p.h"
+#include "qleadvertiser_bluez_p.h"
 #include "bluez/bluez_data_p.h"
 #include "bluez/hcimanager_p.h"
 #include "bluez/objectmanager_p.h"
@@ -69,8 +33,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define ATT_DEFAULT_LE_MTU 23
-#define ATT_MAX_LE_MTU 0x200
+constexpr quint16 ATT_DEFAULT_LE_MTU = 23;
+constexpr quint16 ATT_MAX_LE_MTU = 0x200;
 
 #define GATT_PRIMARY_SERVICE    quint16(0x2800)
 #define GATT_SECONDARY_SERVICE  quint16(0x2801)
@@ -206,8 +170,8 @@ template<> void putDataAndIncrement(const QBluetoothUuid &uuid, char *&dst)
 template<> void putDataAndIncrement(const QByteArray &value, char *&dst)
 {
     using namespace std;
-    memcpy(dst, value.constData(), value.count());
-    dst += value.count();
+    memcpy(dst, value.constData(), value.size());
+    dst += value.size();
 }
 
 QLowEnergyControllerPrivateBluez::QLowEnergyControllerPrivateBluez()
@@ -223,28 +187,30 @@ QLowEnergyControllerPrivateBluez::QLowEnergyControllerPrivateBluez()
 
 void QLowEnergyControllerPrivateBluez::init()
 {
-    hciManager = new HciManager(localAdapter, this);
+    // The HCI manager is shared between this class and the advertiser
+    hciManager = std::make_shared<HciManager>(localAdapter);
+
     if (!hciManager->isValid()){
         setError(QLowEnergyController::InvalidBluetoothAdapterError);
         return;
     }
 
     hciManager->monitorEvent(HciManager::HciEvent::EVT_ENCRYPT_CHANGE);
-    connect(hciManager, SIGNAL(encryptionChangedEvent(QBluetoothAddress,bool)),
+    connect(hciManager.get(), SIGNAL(encryptionChangedEvent(QBluetoothAddress,bool)),
             this, SLOT(encryptionChangedEvent(QBluetoothAddress,bool)));
     hciManager->monitorEvent(HciManager::HciEvent::EVT_LE_META_EVENT);
     hciManager->monitorAclPackets();
-    connect(hciManager, &HciManager::connectionComplete, [this](quint16 handle) {
+    connect(hciManager.get(), &HciManager::connectionComplete, [this](quint16 handle) {
         connectionHandle = handle;
         qCDebug(QT_BT_BLUEZ) << "received connection complete event, handle:" << handle;
     });
-    connect(hciManager, &HciManager::connectionUpdate,
+    connect(hciManager.get(), &HciManager::connectionUpdate,
             [this](quint16 handle, const QLowEnergyConnectionParameters &params) {
                 if (handle == connectionHandle)
                     emit q_ptr->connectionUpdated(params);
             }
     );
-    connect(hciManager, &HciManager::signatureResolvingKeyReceived,
+    connect(hciManager.get(), &HciManager::signatureResolvingKeyReceived,
             [this](quint16 handle, bool remoteKey, const quint128 &csrk) {
                 if (handle != connectionHandle)
                     return;
@@ -367,6 +333,7 @@ QLowEnergyControllerPrivateBluez::~QLowEnergyControllerPrivateBluez()
 {
     closeServerSocket();
     delete cmacCalculator;
+    cmacCalculator = nullptr;
 }
 
 class ServerSocket
@@ -425,7 +392,7 @@ void QLowEnergyControllerPrivateBluez::startAdvertising(const QLowEnergyAdvertis
 {
     qCDebug(QT_BT_BLUEZ) << "Starting to advertise";
     if (!advertiser) {
-        advertiser = new QLeAdvertiserBluez(params, advertisingData, scanResponseData, *hciManager,
+        advertiser = new QLeAdvertiserBluez(params, advertisingData, scanResponseData, hciManager,
                                             this);
         connect(advertiser, &QLeAdvertiser::errorOccurred, this,
                 &QLowEnergyControllerPrivateBluez::handleAdvertisingError);
@@ -1152,7 +1119,7 @@ void QLowEnergyControllerPrivateBluez::processReply(
                 lastHandle = parseReadByTypeIncludeDiscovery(
                             &includedServices, &data[offset], elementLength);
                 p->includedServices = includedServices;
-                for (const QBluetoothUuid &uuid : qAsConst(includedServices)) {
+                for (const QBluetoothUuid &uuid : std::as_const(includedServices)) {
                     if (serviceList.contains(uuid))
                         serviceList[uuid]->type |= QLowEnergyService::IncludedService;
                 }
@@ -1320,7 +1287,7 @@ void QLowEnergyControllerPrivateBluez::processReply(
         Q_ASSERT(!p.isNull());
 
         if (isErrorResponse) {
-            if (keys.count() == 1) {
+            if (keys.size() == 1) {
                 // no more descriptors to discover
                 readServiceValues(p->uuid, false); //read descriptor values
             } else {
@@ -1388,7 +1355,7 @@ void QLowEnergyControllerPrivateBluez::processReply(
         }
 
         const QLowEnergyHandle nextPotentialHandle = descriptorHandle + 1;
-        if (keys.count() == 1) {
+        if (keys.size() == 1) {
             // Reached last characteristic of service
 
             // The endhandle of a service is always the last handle of
@@ -1677,7 +1644,7 @@ void QLowEnergyControllerPrivateBluez::readServiceValues(
         return;
     }
 
-    for (int i = 0; i < targetHandles.count(); i++) {
+    for (qsizetype i = 0; i < targetHandles.size(); i++) {
         pair = targetHandles.at(i);
         packet[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_READ_REQUEST);
         putBtData(pair.first, &packet[1]);
@@ -1690,7 +1657,7 @@ void QLowEnergyControllerPrivateBluez::readServiceValues(
         request.command = QBluezConst::AttCommand::ATT_OP_READ_REQUEST;
         request.reference = pair.second;
         // last entry?
-        request.reference2 = QVariant((bool)(i + 1 == targetHandles.count()));
+        request.reference2 = QVariant((bool)(i + 1 == targetHandles.size()));
         openRequests.enqueue(request);
     }
 
@@ -1797,7 +1764,7 @@ void QLowEnergyControllerPrivateBluez::exchangeMTU()
 
     quint8 packet[MTU_EXCHANGE_HEADER_SIZE];
     packet[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_EXCHANGE_MTU_REQUEST);
-    putBtData(quint16(ATT_MAX_LE_MTU), &packet[1]);
+    putBtData(ATT_MAX_LE_MTU, &packet[1]);
 
     QByteArray data(MTU_EXCHANGE_HEADER_SIZE, Qt::Uninitialized);
     memcpy(data.data(), packet, MTU_EXCHANGE_HEADER_SIZE);
@@ -1912,7 +1879,7 @@ void QLowEnergyControllerPrivateBluez::discoverNextDescriptor(
 
     const QLowEnergyHandle charStartHandle = startingHandle;
     QLowEnergyHandle charEndHandle = 0;
-    if (pendingCharHandles.count() == 1) //single characteristic
+    if (pendingCharHandles.size() == 1) //single characteristic
         charEndHandle = serviceData->endHandle;
     else
         charEndHandle = pendingCharHandles[1] - 1;
@@ -1960,9 +1927,9 @@ void QLowEnergyControllerPrivateBluez::sendNextPrepareWriteRequest(
                          << Qt::hex << handle;
 
 
-    const int maxAvailablePayload = mtuSize - PREPARE_WRITE_HEADER_SIZE;
-    const int requiredPayload = qMin(newValue.size() - offset, maxAvailablePayload);
-    const int dataSize = PREPARE_WRITE_HEADER_SIZE + requiredPayload;
+    const qsizetype maxAvailablePayload = qsizetype(mtuSize) - PREPARE_WRITE_HEADER_SIZE;
+    const qsizetype requiredPayload = (std::min)(newValue.size() - offset, maxAvailablePayload);
+    const qsizetype dataSize = PREPARE_WRITE_HEADER_SIZE + requiredPayload;
 
     Q_ASSERT((offset + requiredPayload) <= newValue.size());
     Q_ASSERT(dataSize <= mtuSize);
@@ -2175,10 +2142,10 @@ bool QLowEnergyControllerPrivateBluez::checkPacketSize(const QByteArray &packet,
 {
     if (maxSize == -1)
         maxSize = minSize;
-    if (Q_LIKELY(packet.count() >= minSize && packet.count() <= maxSize))
+    if (Q_LIKELY(packet.size() >= minSize && packet.size() <= maxSize))
         return true;
     qCWarning(QT_BT_BLUEZ) << "client request of type" << packet.at(0)
-                           << "has unexpected packet size" << packet.count();
+                           << "has unexpected packet size" << packet.size();
     sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)), 0,
                       QBluezConst::AttError::ATT_ERROR_INVALID_PDU);
     return false;
@@ -2222,12 +2189,12 @@ void QLowEnergyControllerPrivateBluez::handleExchangeMtuRequest(const QByteArray
     // Send reply.
     QByteArray reply(MTU_EXCHANGE_HEADER_SIZE, Qt::Uninitialized);
     reply[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_EXCHANGE_MTU_RESPONSE);
-    putBtData(static_cast<quint16>(ATT_MAX_LE_MTU), reply.data() + 1);
+    putBtData(ATT_MAX_LE_MTU, reply.data() + 1);
     sendPacket(reply);
 
     // Apply requested MTU.
     const quint16 clientRxMtu = bt_get_le16(packet.constData() + 1);
-    mtuSize = qMax<quint16>(ATT_DEFAULT_LE_MTU, qMin<quint16>(clientRxMtu, ATT_MAX_LE_MTU));
+    mtuSize = std::clamp(clientRxMtu, ATT_DEFAULT_LE_MTU, ATT_MAX_LE_MTU);
     qCDebug(QT_BT_BLUEZ) << "MTU request from client:" << clientRxMtu
                          << "effective client RX MTU:" << mtuSize;
     qCDebug(QT_BT_BLUEZ) << "Sending server RX MTU" << ATT_MAX_LE_MTU;
@@ -2278,7 +2245,7 @@ void QLowEnergyControllerPrivateBluez::handleFindByTypeValueRequest(const QByteA
     const QLowEnergyHandle startingHandle = bt_get_le16(packet.constData() + 1);
     const QLowEnergyHandle endingHandle = bt_get_le16(packet.constData() + 3);
     const quint16 type = bt_get_le16(packet.constData() + 5);
-    const QByteArray value = QByteArray::fromRawData(packet.constData() + 7, packet.count() - 7);
+    const QByteArray value = QByteArray::fromRawData(packet.constData() + 7, packet.size() - 7);
     qCDebug(QT_BT_BLUEZ) << "client sends find by type value request; start:" << startingHandle
                          << "end:" << endingHandle << "type:" << type
                          << "value:" << value.toHex();
@@ -2316,15 +2283,15 @@ void QLowEnergyControllerPrivateBluez::handleReadByTypeRequest(const QByteArray 
     const QLowEnergyHandle startingHandle = bt_get_le16(packet.constData() + 1);
     const QLowEnergyHandle endingHandle = bt_get_le16(packet.constData() + 3);
     const void * const typeStart = packet.constData() + 5;
-    const bool is16BitUuid = packet.count() == 7;
-    const bool is128BitUuid = packet.count() == 21;
+    const bool is16BitUuid = packet.size() == 7;
+    const bool is128BitUuid = packet.size() == 21;
     QBluetoothUuid type;
     if (is16BitUuid) {
         type = QBluetoothUuid(bt_get_le16(typeStart));
     } else if (is128BitUuid) {
         type = QBluetoothUuid(convert_uuid128(reinterpret_cast<const quint128 *>(typeStart)));
     } else {
-        qCWarning(QT_BT_BLUEZ) << "read by type request has invalid packet size" << packet.count();
+        qCWarning(QT_BT_BLUEZ) << "read by type request has invalid packet size" << packet.size();
         sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)), 0,
                           QBluezConst::AttError::ATT_ERROR_INVALID_PDU);
         return;
@@ -2354,7 +2321,7 @@ void QLowEnergyControllerPrivateBluez::handleReadByTypeRequest(const QByteArray 
         return;
     }
 
-    const int elementSize = sizeof(QLowEnergyHandle) + results.first().value.count();
+    const qsizetype elementSize = sizeof(QLowEnergyHandle) + results.first().value.size();
     QByteArray responsePrefix(2, Qt::Uninitialized);
     responsePrefix[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_READ_BY_TYPE_RESPONSE);
     responsePrefix[1] = elementSize;
@@ -2384,7 +2351,7 @@ void QLowEnergyControllerPrivateBluez::handleReadRequest(const QByteArray &packe
         return;
     }
 
-    const int sentValueLength = qMin(attribute.value.count(), mtuSize - 1);
+    const qsizetype sentValueLength = (std::min)(attribute.value.size(), qsizetype(mtuSize) - 1);
     QByteArray response(1 + sentValueLength, Qt::Uninitialized);
     response[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_READ_RESPONSE);
     using namespace std;
@@ -2413,19 +2380,20 @@ void QLowEnergyControllerPrivateBluez::handleReadBlobRequest(const QByteArray &p
                           permissionsError);
         return;
     }
-    if (valueOffset > attribute.value.count()) {
+    if (valueOffset > attribute.value.size()) {
         sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)), handle,
                           QBluezConst::AttError::ATT_ERROR_INVALID_OFFSET);
         return;
     }
-    if (attribute.value.count() <= mtuSize - 3) {
+    if (attribute.value.size() <= mtuSize - 3) {
         sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)), handle,
                           QBluezConst::AttError::ATT_ERROR_ATTRIBUTE_NOT_LONG);
         return;
     }
 
     // Yes, this value can be zero.
-    const int sentValueLength = qMin(attribute.value.count() - valueOffset, mtuSize - 1);
+    const qsizetype sentValueLength = (std::min)(attribute.value.size() - valueOffset,
+                                                 qsizetype(mtuSize) - 1);
 
     QByteArray response(1 + sentValueLength, Qt::Uninitialized);
     response[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_READ_BLOB_RESPONSE);
@@ -2441,9 +2409,9 @@ void QLowEnergyControllerPrivateBluez::handleReadMultipleRequest(const QByteArra
 
     if (!checkPacketSize(packet, 5, mtuSize))
         return;
-    QList<QLowEnergyHandle> handles((packet.count() - 1) / sizeof(QLowEnergyHandle));
+    QList<QLowEnergyHandle> handles((packet.size() - 1) / sizeof(QLowEnergyHandle));
     auto *packetPtr = reinterpret_cast<const QLowEnergyHandle *>(packet.constData() + 1);
-    for (int i = 0; i < handles.count(); ++i, ++packetPtr)
+    for (qsizetype i = 0; i < handles.size(); ++i, ++packetPtr)
         handles[i] = bt_get_le16(packetPtr);
     qCDebug(QT_BT_BLUEZ) << "client sends read multiple request for handles" << handles;
 
@@ -2467,7 +2435,7 @@ void QLowEnergyControllerPrivateBluez::handleReadMultipleRequest(const QByteArra
 
         // Note: We do not abort if no more values fit into the packet, because we still have to
         //       report possible permission errors for the other handles.
-        response += attr.value.left(mtuSize - response.count());
+        response += attr.value.left(mtuSize - response.size());
     }
 
     qCDebug(QT_BT_BLUEZ) << "sending response:" << response.toHex();
@@ -2482,8 +2450,8 @@ void QLowEnergyControllerPrivateBluez::handleReadByGroupTypeRequest(const QByteA
         return;
     const QLowEnergyHandle startingHandle = bt_get_le16(packet.constData() + 1);
     const QLowEnergyHandle endingHandle = bt_get_le16(packet.constData() + 3);
-    const bool is16BitUuid = packet.count() == 7;
-    const bool is128BitUuid = packet.count() == 21;
+    const bool is16BitUuid = packet.size() == 7;
+    const bool is128BitUuid = packet.size() == 21;
     const void * const typeStart = packet.constData() + 5;
     QBluetoothUuid type;
     if (is16BitUuid) {
@@ -2492,7 +2460,7 @@ void QLowEnergyControllerPrivateBluez::handleReadByGroupTypeRequest(const QByteA
         type = QBluetoothUuid(convert_uuid128(reinterpret_cast<const quint128 *>(typeStart)));
     } else {
         qCWarning(QT_BT_BLUEZ) << "read by group type request has invalid packet size"
-                               << packet.count();
+                               << packet.size();
         sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)), 0,
                           QBluezConst::AttError::ATT_ERROR_INVALID_PDU);
         return;
@@ -2527,7 +2495,7 @@ void QLowEnergyControllerPrivateBluez::handleReadByGroupTypeRequest(const QByteA
 
     ensureUniformValueSizes(results);
 
-    const int elementSize = 2 * sizeof(QLowEnergyHandle) + results.first().value.count();
+    const qsizetype elementSize = 2 * sizeof(QLowEnergyHandle) + results.first().value.size();
     QByteArray responsePrefix(2, Qt::Uninitialized);
     responsePrefix[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_READ_BY_GROUP_RESPONSE);
     responsePrefix[1] = elementSize;
@@ -2546,7 +2514,7 @@ void QLowEnergyControllerPrivateBluez::updateLocalAttributeValue(
         QLowEnergyDescriptor &descriptor)
 {
     localAttributes[handle].value = value;
-    for (const auto &service : qAsConst(localServices)) {
+    for (const auto &service : std::as_const(localServices)) {
         if (handle < service->startHandle || handle > service->endHandle)
             continue;
         for (auto charIt = service->characteristicList.begin();
@@ -2580,8 +2548,8 @@ void QLowEnergyControllerPrivateBluez::writeCharacteristicForPeripheral(
     const QLowEnergyHandle valueHandle = charData.valueHandle;
     Q_ASSERT(valueHandle <= lastLocalHandle);
     Attribute &attribute = localAttributes[valueHandle];
-    if (newValue.count() < attribute.minLength || newValue.count() > attribute.maxLength) {
-        qCWarning(QT_BT_BLUEZ) << "ignoring value of invalid length" << newValue.count()
+    if (newValue.size() < attribute.minLength || newValue.size() > attribute.maxLength) {
+        qCWarning(QT_BT_BLUEZ) << "ignoring value of invalid length" << newValue.size()
                                << "for attribute" << valueHandle;
         return;
     }
@@ -2592,14 +2560,14 @@ void QLowEnergyControllerPrivateBluez::writeCharacteristicForPeripheral(
             = attribute.properties & QLowEnergyCharacteristic::Indicate;
     if (!hasNotifyProperty && !hasIndicateProperty)
         return;
-    for (const QLowEnergyServicePrivate::DescData &desc : qAsConst(charData.descriptorList)) {
+    for (const QLowEnergyServicePrivate::DescData &desc : std::as_const(charData.descriptorList)) {
         if (desc.uuid != QBluetoothUuid::DescriptorType::ClientCharacteristicConfiguration)
             continue;
 
         // Notify/indicate currently connected client.
         const bool isConnected = state == QLowEnergyController::ConnectedState;
         if (isConnected) {
-            Q_ASSERT(desc.value.count() == 2);
+            Q_ASSERT(desc.value.size() == 2);
             quint16 configValue = bt_get_le16(desc.value.constData());
             if (isNotificationEnabled(configValue) && hasNotifyProperty) {
                 sendNotification(valueHandle);
@@ -2636,9 +2604,9 @@ void QLowEnergyControllerPrivateBluez::writeCharacteristicForCentral(const QShar
         const QByteArray &newValue,
         QLowEnergyService::WriteMode mode)
 {
-    QByteArray packet(WRITE_REQUEST_HEADER_SIZE + newValue.count(), Qt::Uninitialized);
+    QByteArray packet(WRITE_REQUEST_HEADER_SIZE + newValue.size(), Qt::Uninitialized);
     putBtData(valueHandle, packet.data() + 1);
-    memcpy(packet.data() + 3, newValue.constData(), newValue.count());
+    memcpy(packet.data() + 3, newValue.constData(), newValue.size());
     bool writeWithResponse = false;
     switch (mode) {
     case QLowEnergyService::WriteWithResponse:
@@ -2675,14 +2643,14 @@ void QLowEnergyControllerPrivateBluez::writeCharacteristicForCentral(const QShar
         ++signingDataIt.value().counter;
         packet = LeCmacCalculator::createFullMessage(packet, signingDataIt.value().counter);
         const quint64 mac = LeCmacCalculator().calculateMac(packet, signingDataIt.value().key);
-        packet.resize(packet.count() + sizeof mac);
-        putBtData(mac, packet.data() + packet.count() - sizeof mac);
+        packet.resize(packet.size() + sizeof mac);
+        putBtData(mac, packet.data() + packet.size() - sizeof mac);
         storeSignCounter(LocalSigningKey);
         break;
     }
 
     qCDebug(QT_BT_BLUEZ) << "Writing characteristic" << Qt::hex << charHandle
-                         << "(size:" << packet.count() << "with response:"
+                         << "(size:" << packet.size() << "with response:"
                          << (mode == QLowEnergyService::WriteWithResponse)
                          << "signed:" << (mode == QLowEnergyService::WriteSigned) << ")";
 
@@ -2712,8 +2680,8 @@ void QLowEnergyControllerPrivateBluez::writeDescriptorForPeripheral(
 {
     Q_ASSERT(descriptorHandle <= lastLocalHandle);
     Attribute &attribute = localAttributes[descriptorHandle];
-    if (newValue.count() < attribute.minLength || newValue.count() > attribute.maxLength) {
-        qCWarning(QT_BT_BLUEZ) << "invalid value of size" << newValue.count()
+    if (newValue.size() < attribute.minLength || newValue.size() > attribute.maxLength) {
+        qCWarning(QT_BT_BLUEZ) << "invalid value of size" << newValue.size()
                                << "for attribute" << descriptorHandle;
         return;
     }
@@ -2736,7 +2704,7 @@ void QLowEnergyControllerPrivateBluez::writeDescriptorForCentral(
     packet[0] = static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_WRITE_REQUEST);
     putBtData(descriptorHandle, &packet[1]);
 
-    const int size = WRITE_REQUEST_HEADER_SIZE + newValue.size();
+    const qsizetype size = WRITE_REQUEST_HEADER_SIZE + newValue.size();
     QByteArray data(size, Qt::Uninitialized);
     memcpy(data.data(), packet, WRITE_REQUEST_HEADER_SIZE);
     memcpy(&(data.data()[WRITE_REQUEST_HEADER_SIZE]), newValue.constData(), newValue.size());
@@ -2798,7 +2766,7 @@ void QLowEnergyControllerPrivateBluez::handleWriteRequestOrCommand(const QByteAr
             return;
         }
 
-        const quint32 signCounter = getBtData<quint32>(packet.data() + packet.count() - 12);
+        const quint32 signCounter = getBtData<quint32>(packet.data() + packet.size() - 12);
         if (signCounter < signingDataIt.value().counter + 1) {
             qCWarning(QT_BT_BLUEZ) << "Client's' sign counter" << signCounter
                                    << "not greater than local sign counter"
@@ -2807,8 +2775,8 @@ void QLowEnergyControllerPrivateBluez::handleWriteRequestOrCommand(const QByteAr
             return;
         }
 
-        const quint64 macFromClient = getBtData<quint64>(packet.data() + packet.count() - 8);
-        const bool signatureCorrect = verifyMac(packet.left(packet.count() - 12),
+        const quint64 macFromClient = getBtData<quint64>(packet.data() + packet.size() - 8);
+        const bool signatureCorrect = verifyMac(packet.left(packet.size() - 12),
                 signingDataIt.value().key, signCounter, macFromClient);
         if (!signatureCorrect) {
             qCWarning(QT_BT_BLUEZ) << "Signed Write packet has wrong signature, disconnecting";
@@ -2818,9 +2786,9 @@ void QLowEnergyControllerPrivateBluez::handleWriteRequestOrCommand(const QByteAr
 
         signingDataIt.value().counter = signCounter;
         storeSignCounter(RemoteSigningKey);
-        valueLength = packet.count() - 15;
+        valueLength = packet.size() - 15;
     } else {
-        valueLength = packet.count() - 3;
+        valueLength = packet.size() - 3;
     }
 
     if (valueLength > attribute.maxLength) {
@@ -2872,7 +2840,7 @@ void QLowEnergyControllerPrivateBluez::handlePrepareWriteRequest(const QByteArra
                           permissionsError);
         return;
     }
-    if (openPrepareWriteRequests.count() >= maxPrepareQueueSize) {
+    if (openPrepareWriteRequests.size() >= maxPrepareQueueSize) {
         sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)), handle,
                           QBluezConst::AttError::ATT_ERROR_PREPARE_QUEUE_FULL);
         return;
@@ -2902,15 +2870,15 @@ void QLowEnergyControllerPrivateBluez::handleExecuteWriteRequest(const QByteArra
     QList<QLowEnergyCharacteristic> characteristics;
     QList<QLowEnergyDescriptor> descriptors;
     if (!cancel) {
-        for (const WriteRequest &request : qAsConst(requests)) {
+        for (const WriteRequest &request : std::as_const(requests)) {
             Attribute &attribute = localAttributes[request.handle];
-            if (request.valueOffset > attribute.value.count()) {
+            if (request.valueOffset > attribute.value.size()) {
                 sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)),
                                   request.handle, QBluezConst::AttError::ATT_ERROR_INVALID_OFFSET);
                 return;
             }
             const QByteArray newValue = attribute.value.left(request.valueOffset) + request.value;
-            if (newValue.count() > attribute.maxLength) {
+            if (newValue.size() > attribute.maxLength) {
                 sendErrorResponse(static_cast<QBluezConst::AttCommand>(packet.at(0)),
                                   request.handle,
                                   QBluezConst::AttError::ATT_ERROR_INVAL_ATTR_VALUE_LEN);
@@ -2933,9 +2901,9 @@ void QLowEnergyControllerPrivateBluez::handleExecuteWriteRequest(const QByteArra
     sendPacket(QByteArray(
             1, static_cast<quint8>(QBluezConst::AttCommand::ATT_OP_EXECUTE_WRITE_RESPONSE)));
 
-    for (const QLowEnergyCharacteristic &characteristic : qAsConst(characteristics))
+    for (const QLowEnergyCharacteristic &characteristic : std::as_const(characteristics))
         emit characteristic.d_ptr->characteristicChanged(characteristic, characteristic.value());
-    for (const QLowEnergyDescriptor &descriptor : qAsConst(descriptors))
+    for (const QLowEnergyDescriptor &descriptor : std::as_const(descriptors))
         emit descriptor.d_ptr->descriptorWritten(descriptor, descriptor.value());
 }
 
@@ -2958,13 +2926,14 @@ void QLowEnergyControllerPrivateBluez::sendErrorResponse(QBluezConst::AttCommand
     sendPacket(packet);
 }
 
-void QLowEnergyControllerPrivateBluez::sendListResponse(const QByteArray &packetStart, int elemSize,
+void QLowEnergyControllerPrivateBluez::sendListResponse(const QByteArray &packetStart,
+                                                        qsizetype elemSize,
                                                         const QList<Attribute> &attributes,
                                                         const ElemWriter &elemWriter)
 {
-    const int offset = packetStart.count();
-    const int elemCount = qMin(attributes.count(), (mtuSize - offset) / elemSize);
-    const int totalPacketSize = offset + elemCount * elemSize;
+    const qsizetype offset = packetStart.size();
+    const qsizetype elemCount = (std::min)(attributes.size(), (mtuSize - offset) / elemSize);
+    const qsizetype totalPacketSize = offset + elemCount * elemSize;
     QByteArray response(totalPacketSize, Qt::Uninitialized);
     using namespace std;
     memcpy(response.data(), packetStart.constData(), offset);
@@ -2992,7 +2961,7 @@ void QLowEnergyControllerPrivateBluez::sendNotificationOrIndication(QBluezConst:
 {
     Q_ASSERT(handle <= lastLocalHandle);
     const Attribute &attribute = localAttributes.at(handle);
-    const int maxValueLength = qMin(attribute.value.count(), mtuSize - 3);
+    const qsizetype maxValueLength = (std::min)(attribute.value.size(), qsizetype(mtuSize) - 3);
     QByteArray packet(3 + maxValueLength, Qt::Uninitialized);
     packet[0] = static_cast<quint8>(opCode);
     putBtData(handle, packet.data() + 1);
@@ -3115,7 +3084,7 @@ QList<QLowEnergyControllerPrivateBluez::TempClientConfigurationData>
 QLowEnergyControllerPrivateBluez::gatherClientConfigData()
 {
     QList<TempClientConfigurationData> data;
-    for (const auto &service : qAsConst(localServices)) {
+    for (const auto &service : std::as_const(localServices)) {
         for (auto charIt = service->characteristicList.begin();
              charIt != service->characteristicList.end(); ++charIt) {
             QLowEnergyServicePrivate::CharData &charData = charIt.value();
@@ -3142,7 +3111,7 @@ void QLowEnergyControllerPrivateBluez::storeClientConfigurations()
     QList<ClientConfigurationData> clientConfigs;
     const QList<TempClientConfigurationData> &tempConfigList = gatherClientConfigData();
     for (const auto &tempConfigData : tempConfigList) {
-        Q_ASSERT(tempConfigData.descData->value.count() == 2);
+        Q_ASSERT(tempConfigData.descData->value.size() == 2);
         const quint16 value = bt_get_le16(tempConfigData.descData->value.constData());
         if (value != 0) {
             clientConfigs << ClientConfigurationData(tempConfigData.charValueHandle,
@@ -3163,7 +3132,7 @@ void QLowEnergyControllerPrivateBluez::restoreClientConfigurations()
         bool wasRestored = false;
         for (const auto &restoredData : restoredClientConfigs) {
             if (restoredData.charValueHandle == tempConfigData.charValueHandle) {
-                Q_ASSERT(tempConfigData.descData->value.count() == 2);
+                Q_ASSERT(tempConfigData.descData->value.size() == 2);
                 putBtData(restoredData.configValue, tempConfigData.descData->value.data());
                 wasRestored = true;
                 if (restoredData.charValueWasUpdated) {
@@ -3182,7 +3151,7 @@ void QLowEnergyControllerPrivateBluez::restoreClientConfigurations()
         localAttributes[tempConfigData.configHandle].value = tempConfigData.descData->value;
     }
 
-    for (const QLowEnergyHandle handle : qAsConst(notifications))
+    for (const QLowEnergyHandle handle : std::as_const(notifications))
         sendNotification(handle);
     sendNextIndication();
 }
@@ -3206,16 +3175,16 @@ void QLowEnergyControllerPrivateBluez::loadSigningDataIfNecessary(SigningKeyType
         return;
     }
     const QByteArray keyData = QByteArray::fromHex(keyString);
-    if (keyData.count() != int(sizeof(quint128))) {
+    if (keyData.size() != qsizetype(sizeof(quint128))) {
         qCWarning(QT_BT_BLUEZ) << "Signing key in settings file has invalid size"
-                               << keyString.count();
+                               << keyString.size();
         return;
     }
     qCDebug(QT_BT_BLUEZ) << "CSRK of peer device is" << keyString;
     const quint32 counter = settings.value(QLatin1String("Counter"), 0).toUInt();
     quint128 csrk;
     using namespace std;
-    memcpy(csrk.data, keyData.constData(), keyData.count());
+    memcpy(csrk.data, keyData.constData(), keyData.size());
     signingData.insert(remoteDevice.toUInt64(), SigningData(csrk, counter - 1));
 }
 
@@ -3302,7 +3271,7 @@ void QLowEnergyControllerPrivateBluez::addToGenericAttributeList(const QLowEnerg
 
         // Characteristic declaration;
         attribute.handle = ++currentHandle;
-        attribute.groupEndHandle = attribute.handle + 1 + cd.descriptors().count();
+        attribute.groupEndHandle = attribute.handle + 1 + cd.descriptors().size();
         attribute.type = QBluetoothUuid(GATT_CHARACTERISTIC);
         attribute.properties = QLowEnergyCharacteristic::Read;
         attribute.value.resize(1 + sizeof(QLowEnergyHandle) + cd.uuid().minimumSize());
@@ -3366,10 +3335,10 @@ void QLowEnergyControllerPrivateBluez::addToGenericAttributeList(const QLowEnerg
             }
 
             attribute.value = dd.value();
-            if (attribute.value.count() < attribute.minLength
-                    || attribute.value.count() > attribute.maxLength) {
+            if (attribute.value.size() < attribute.minLength
+                    || attribute.value.size() > attribute.maxLength) {
                 qCWarning(QT_BT_BLUEZ) << "attribute of type" << attribute.type
-                                       << "has invalid length of" << attribute.value.count()
+                                       << "has invalid length of" << attribute.value.size()
                                        << "bytes";
                 attribute.value = QByteArray(attribute.minLength, 0);
             }
@@ -3407,7 +3376,7 @@ void QLowEnergyControllerPrivateBluez::ensureUniformUuidSizes(QList<Attribute> &
 void QLowEnergyControllerPrivateBluez::ensureUniformValueSizes(QList<Attribute> &attributes)
 {
     ensureUniformAttributes(attributes,
-                            [](const Attribute &attr) { return attr.value.count(); });
+                            [](const Attribute &attr) { return attr.value.size(); });
 }
 
 QList<QLowEnergyControllerPrivateBluez::Attribute>
@@ -3507,3 +3476,5 @@ bool QLowEnergyControllerPrivateBluez::verifyMac(const QByteArray &message, cons
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qlowenergycontroller_bluez_p.cpp"

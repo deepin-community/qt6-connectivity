@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2017 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2017 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qlowenergycontroller.h"
 
@@ -54,6 +18,7 @@
 #include "qlowenergycontroller_bluez_p.h"
 #elif defined(QT_ANDROID_BLUETOOTH)
 #include "qlowenergycontroller_android_p.h"
+#include "android/androidutils_p.h"
 #elif defined(QT_WINRT_BLUETOOTH)
 #include "qtbluetoothglobal_p.h"
 #include "qlowenergycontroller_winrt_p.h"
@@ -67,8 +32,17 @@
 
 QT_BEGIN_NAMESPACE
 
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyController::Error, QLowEnergyController__Error)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyController::ControllerState,
+                               QLowEnergyController__ControllerState)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyController::RemoteAddressType,
+                               QLowEnergyController__RemoteAddressType)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyController::Role, QLowEnergyController__Role)
+
 Q_DECLARE_LOGGING_CATEGORY(QT_BT)
-Q_DECLARE_LOGGING_CATEGORY(QT_BT_WINDOWS)
+#if defined(QT_ANDROID_BLUETOOTH)
+Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
+#endif
 
 /*!
     \class QLowEnergyController
@@ -150,15 +124,14 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT_WINDOWS)
     \value InvalidBluetoothAdapterError The local Bluetooth device with the address passed to
                                         the constructor of this class cannot be found or
                                         there is no local Bluetooth device.
-    \value ConnectionError              The attempt to connect to the remote device failed.
-                                        This value was introduced by Qt 5.5.
-    \value AdvertisingError             The attempt to start advertising failed.
-                                        This value was introduced by Qt 5.7.
-    \value RemoteHostClosedError        The remote device closed the connection.
-                                        This value was introduced by Qt 5.10.
-    \value AuthorizationError           The local Bluetooth device closed the connection due to
-                                        insufficient authorization.
-                                        This value was introduced by Qt 5.14.
+    \value [since 5.5] ConnectionError  The attempt to connect to the remote device failed.
+    \value [since 5.7] AdvertisingError The attempt to start advertising failed.
+    \value [since 5.10] RemoteHostClosedError   The remote device closed the connection.
+    \value [since 5.14] AuthorizationError      The local Bluetooth device closed the connection
+                                                due to insufficient authorization.
+    \value [since 6.4] MissingPermissionsError  The operating system requests
+                                                permissions which were not
+                                                granted by the user.
 */
 
 /*!
@@ -174,8 +147,7 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT_WINDOWS)
     \value DiscoveredState    The controller has discovered all services offered by the
                               remote device.
     \value ClosingState       The controller is about to be disconnected from the remote device.
-    \value AdvertisingState   The controller is currently advertising data.
-                              This value was introduced by Qt 5.7.
+    \value [since 5.7] AdvertisingState The controller is currently advertising data.
 */
 
 /*!
@@ -207,7 +179,7 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT_WINDOWS)
    \sa QLowEnergyController::createCentral()
    \sa QLowEnergyController::createPeripheral()
    \since 5.7
-   \note The peripheral role is currently only supported on Linux. In addition, handling the
+   \note The peripheral role is not supported on Windows. In addition on Linux, handling the
          "Signed Write" ATT command on the server side requires BlueZ 5 and kernel version 3.7
          or newer.
  */
@@ -612,6 +584,7 @@ void QLowEnergyController::connectToDevice()
     }
 
     if (!d->isValidLocalAdapter()) {
+        qCWarning(QT_BT) << "connectToDevice() LE controller has invalid adapter";
         d->setError(QLowEnergyController::InvalidBluetoothAdapterError);
         return;
     }
@@ -748,7 +721,6 @@ QLowEnergyService *QLowEnergyController::createServiceObject(
    of uuids. In such cases \a scanResponseData may be used for additional information.
 
    If this object is currently not in the \l UnconnectedState, nothing happens.
-   \note Advertising will stop automatically once a client connects to the local device.
 
    \since 5.7
    \sa stopAdvertising()
@@ -818,6 +790,13 @@ QLowEnergyService *QLowEnergyController::addService(const QLowEnergyServiceData 
         qCWarning(QT_BT) << "Not adding invalid service";
         return nullptr;
     }
+
+#if defined(QT_ANDROID_BLUETOOTH)
+    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+        qCWarning(QT_BT_ANDROID) << "addService() failed due to missing permissions";
+        return nullptr;
+    }
+#endif
 
     Q_D(QLowEnergyController);
     QLowEnergyService *newService = d->addServiceHelper(service);
@@ -920,3 +899,5 @@ int QLowEnergyController::mtu() const
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qlowenergycontroller.cpp"

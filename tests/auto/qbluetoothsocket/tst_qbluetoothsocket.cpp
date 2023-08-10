@@ -1,30 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include <QtTest/QtTest>
 
@@ -35,6 +10,9 @@
 #include <qbluetoothserviceinfo.h>
 #include <qbluetoothservicediscoveryagent.h>
 #include <qbluetoothlocaldevice.h>
+#if QT_CONFIG(bluez)
+#include <QtBluetooth/private/bluez5_helper_p.h>
+#endif
 
 QT_USE_NAMESPACE
 
@@ -115,7 +93,7 @@ void tst_QBluetoothSocket::initTestCase()
 {
     // setup Bluetooth env
     const QList<QBluetoothHostInfo> foundDevices = QBluetoothLocalDevice::allDevices();
-    if (!foundDevices.count()) {
+    if (foundDevices.isEmpty()) {
         qWarning() << "Missing local device";
         return;
     } else {
@@ -143,7 +121,7 @@ void tst_QBluetoothSocket::initTestCase()
     qDebug() << "Starting discovery";
 
     sda->setUuidFilter(QBluetoothUuid(QString(TEST_SERVICE_UUID)));
-    sda->start(QBluetoothServiceDiscoveryAgent::MinimalDiscovery);
+    sda->start(QBluetoothServiceDiscoveryAgent::FullDiscovery);
 
     for (int connectTime = MaxConnectTime; !done_discovery && connectTime > 0; connectTime -= 1000)
         QTest::qWait(1000);
@@ -254,24 +232,24 @@ void tst_QBluetoothSocket::tst_serviceConnection()
 
     socket.connectToService(remoteServiceInfo);
 
-    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(stateSpy.size(), 1);
     QCOMPARE(stateSpy.takeFirst().at(0).value<QBluetoothSocket::SocketState>(), QBluetoothSocket::SocketState::ConnectingState);
     QCOMPARE(socket.state(), QBluetoothSocket::SocketState::ConnectingState);
 
     stateSpy.clear();
 
     int connectTime = MaxConnectTime;
-    while (connectedSpy.count() == 0 && errorSpy.count() == 0 && connectTime > 0) {
+    while (connectedSpy.isEmpty()  && errorSpy.isEmpty() && connectTime > 0) {
         QTest::qWait(1000);
         connectTime -= 1000;
     }
 
-    if (errorSpy.count() != 0) {
+    if (!errorSpy.isEmpty()) {
         qDebug() << errorSpy.takeFirst().at(0).toInt();
         QSKIP("Connection error");
     }
-    QCOMPARE(connectedSpy.count(), 1);
-    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(connectedSpy.size(), 1);
+    QCOMPARE(stateSpy.size(), 1);
     QCOMPARE(stateSpy.takeFirst().at(0).value<QBluetoothSocket::SocketState>(), QBluetoothSocket::SocketState::ConnectedState);
     QCOMPARE(socket.state(), QBluetoothSocket::SocketState::ConnectedState);
 
@@ -284,7 +262,13 @@ void tst_QBluetoothSocket::tst_serviceConnection()
     //check the peer & local info
     QCOMPARE(socket.localAddress(), localDevice.address());
     QCOMPARE(socket.localName(), localDevice.name());
+#ifdef Q_OS_WIN
+    // On Windows the socket peer name (aka remotehost display name) seems to be
+    // formed from the BT address and not necessarily the remoteDevice name
+    QVERIFY(!socket.peerName().isEmpty());
+#else
     QCOMPARE(socket.peerName(), remoteDevice.name());
+#endif
     QCOMPARE(socket.peerAddress(), remoteDevice.address());
 
     /* Disconnection */
@@ -296,17 +280,17 @@ void tst_QBluetoothSocket::tst_serviceConnection()
     QCOMPARE(socket.isOpen(), false);
     QCOMPARE(socket.openMode(), QIODevice::NotOpen);
 
-    QVERIFY(stateSpy.count() >= 1);
+    QVERIFY(!stateSpy.isEmpty());
     QCOMPARE(stateSpy.takeFirst().at(0).value<QBluetoothSocket::SocketState>(), QBluetoothSocket::SocketState::ClosingState);
 
     int disconnectTime = MaxConnectTime;
-    while (disconnectedSpy.count() == 0 && disconnectTime > 0) {
+    while (disconnectedSpy.isEmpty() && disconnectTime > 0) {
         QTest::qWait(1000);
         disconnectTime -= 1000;
     }
 
-    QCOMPARE(disconnectedSpy.count(), 1);
-    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(disconnectedSpy.size(), 1);
+    QCOMPARE(stateSpy.size(), 1);
     QCOMPARE(stateSpy.takeFirst().at(0).value<QBluetoothSocket::SocketState>(), QBluetoothSocket::SocketState::UnconnectedState);
 
     // The remote service needs time to close the connection and resume listening
@@ -349,14 +333,14 @@ void tst_QBluetoothSocket::tst_clientCommunication()
     QCOMPARE(socket.openMode(), QIODevice::NotOpen);
     socket.connectToService(remoteServiceInfo);
 
-    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(stateSpy.size(), 1);
     QCOMPARE(qvariant_cast<QBluetoothSocket::SocketState>(stateSpy.takeFirst().at(0)), QBluetoothSocket::SocketState::ConnectingState);
     QCOMPARE(socket.state(), QBluetoothSocket::SocketState::ConnectingState);
 
     stateSpy.clear();
 
     int connectTime = MaxConnectTime;
-    while (connectedSpy.count() == 0 && connectTime > 0) {
+    while (connectedSpy.isEmpty() && connectTime > 0) {
         QTest::qWait(1000);
         connectTime -= 1000;
     }
@@ -365,8 +349,8 @@ void tst_QBluetoothSocket::tst_clientCommunication()
     QCOMPARE(socket.isReadable(), true);
     QCOMPARE(socket.isOpen(), true);
 
-    QCOMPARE(connectedSpy.count(), 1);
-    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(connectedSpy.size(), 1);
+    QCOMPARE(stateSpy.size(), 1);
     QCOMPARE(qvariant_cast<QBluetoothSocket::SocketState>(stateSpy.takeFirst().at(0)), QBluetoothSocket::SocketState::ConnectedState);
     QCOMPARE(socket.state(), QBluetoothSocket::SocketState::ConnectedState);
 
@@ -378,7 +362,7 @@ void tst_QBluetoothSocket::tst_clientCommunication()
 
     {
         /* Send line by line with event loop */
-        for (const QString &line : qAsConst(data)) {
+        for (const QString &line : std::as_const(data)) {
             QSignalSpy readyReadSpy(&socket, SIGNAL(readyRead()));
             QSignalSpy bytesWrittenSpy(&socket, SIGNAL(bytesWritten(qint64)));
 
@@ -387,31 +371,31 @@ void tst_QBluetoothSocket::tst_clientCommunication()
             if (socket.openMode() & QIODevice::Unbuffered)
                 QCOMPARE(socket.bytesToWrite(), qint64(0));
             else
-                QCOMPARE(socket.bytesToWrite(), qint64(line.length()));
+                QCOMPARE(socket.bytesToWrite(), qint64(line.size()));
 
-            QCOMPARE(dataWritten, qint64(line.length()));
+            QCOMPARE(dataWritten, qint64(line.size()));
 
             int readWriteTime = MaxReadWriteTime;
-            while ((bytesWrittenSpy.count() == 0 || readyReadSpy.count() == 0) && readWriteTime > 0) {
+            while ((bytesWrittenSpy.isEmpty() || readyReadSpy.isEmpty()) && readWriteTime > 0) {
                 QTest::qWait(1000);
                 readWriteTime -= 1000;
             }
 
-            QCOMPARE(bytesWrittenSpy.count(), 1);
-            QCOMPARE(bytesWrittenSpy.at(0).at(0).toLongLong(), qint64(line.length()));
+            QCOMPARE(bytesWrittenSpy.size(), 1);
+            QCOMPARE(bytesWrittenSpy.at(0).at(0).toLongLong(), qint64(line.size()));
 
             readWriteTime = MaxReadWriteTime;
-            while ((readyReadSpy.count() == 0) && readWriteTime > 0) {
+            while (readyReadSpy.isEmpty() && readWriteTime > 0) {
                 QTest::qWait(1000);
                 readWriteTime -= 1000;
             }
 
-            QCOMPARE(readyReadSpy.count(), 1);
+            QCOMPARE(readyReadSpy.size(), 1);
 
             if (socket.openMode() & QIODevice::Unbuffered)
-                QVERIFY(socket.bytesAvailable() <= qint64(line.length()));
+                QVERIFY(socket.bytesAvailable() <= qint64(line.size()));
             else
-                QCOMPARE(socket.bytesAvailable(), qint64(line.length()));
+                QCOMPARE(socket.bytesAvailable(), qint64(line.size()));
 
             QVERIFY(socket.canReadLine());
 
@@ -436,24 +420,24 @@ void tst_QBluetoothSocket::tst_clientCommunication()
         if (socket.openMode() & QIODevice::Unbuffered)
             QCOMPARE(socket.bytesToWrite(), qint64(0));
         else
-            QCOMPARE(socket.bytesToWrite(), qint64(joined.length()));
+            QCOMPARE(socket.bytesToWrite(), qint64(joined.size()));
 
-        QCOMPARE(dataWritten, qint64(joined.length()));
+        QCOMPARE(dataWritten, qint64(joined.size()));
 
         int readWriteTime = MaxReadWriteTime;
-        while ((bytesWrittenSpy.count() == 0 || readyReadSpy.count() == 0) && readWriteTime > 0) {
+        while ((bytesWrittenSpy.isEmpty() || readyReadSpy.isEmpty()) && readWriteTime > 0) {
             QTest::qWait(1000);
             readWriteTime -= 1000;
         }
 
-        QCOMPARE(bytesWrittenSpy.count(), 1);
-        QCOMPARE(bytesWrittenSpy.at(0).at(0).toLongLong(), qint64(joined.length()));
-        QVERIFY(readyReadSpy.count() > 0);
+        QCOMPARE(bytesWrittenSpy.size(), 1);
+        QCOMPARE(bytesWrittenSpy.at(0).at(0).toLongLong(), qint64(joined.size()));
+        QVERIFY(!readyReadSpy.isEmpty());
 
         if (socket.openMode() & QIODevice::Unbuffered)
-            QVERIFY(socket.bytesAvailable() <= qint64(joined.length()));
+            QVERIFY(socket.bytesAvailable() <= qint64(joined.size()));
         else
-            QCOMPARE(socket.bytesAvailable(), qint64(joined.length()));
+            QCOMPARE(socket.bytesAvailable(), qint64(joined.size()));
 
         QVERIFY(socket.canReadLine());
 
@@ -473,13 +457,13 @@ void tst_QBluetoothSocket::tst_clientCommunication()
     QCOMPARE(socket.openMode(), QIODevice::NotOpen);
 
     int disconnectTime = MaxConnectTime;
-    while (disconnectedSpy.count() == 0 && disconnectTime > 0) {
+    while (disconnectedSpy.isEmpty() && disconnectTime > 0) {
         QTest::qWait(1000);
         disconnectTime -= 1000;
     }
 
-    QCOMPARE(disconnectedSpy.count(), 1);
-    QCOMPARE(stateSpy.count(), 2);
+    QCOMPARE(disconnectedSpy.size(), 1);
+    QCOMPARE(stateSpy.size(), 2);
     QCOMPARE(qvariant_cast<QBluetoothSocket::SocketState>(stateSpy.takeFirst().at(0)), QBluetoothSocket::SocketState::ClosingState);
     QCOMPARE(qvariant_cast<QBluetoothSocket::SocketState>(stateSpy.takeFirst().at(0)), QBluetoothSocket::SocketState::UnconnectedState);
 
@@ -491,7 +475,7 @@ void tst_QBluetoothSocket::tst_error()
 {
     QBluetoothSocket socket;
     QSignalSpy errorSpy(&socket, SIGNAL(errorOccurred(QBluetoothSocket::SocketError)));
-    QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(errorSpy.size(), 0);
     const QBluetoothSocket::SocketError e = socket.error();
 
     QVERIFY(e == QBluetoothSocket::SocketError::NoSocketError);
@@ -507,7 +491,12 @@ void tst_QBluetoothSocket::tst_preferredSecurityFlags()
 #if defined(QT_ANDROID_BLUETOOTH) || defined(QT_OSX_BLUETOOTH)
     QCOMPARE(socket.preferredSecurityFlags(), QBluetooth::Security::Secure);
 #elif QT_CONFIG(bluez)
-    QCOMPARE(socket.preferredSecurityFlags(), QBluetooth::Security::Authorization);
+    // The bluezdbus socket uses "NoSecurity" by default, whereas the non-dbus bluez
+    // socket uses "Authorization" by default
+    if (bluetoothdVersion() >= QVersionNumber(5, 46))
+        QCOMPARE(socket.preferredSecurityFlags(), QBluetooth::Security::NoSecurity);
+    else
+        QCOMPARE(socket.preferredSecurityFlags(), QBluetooth::Security::Authorization);
 #else
     QCOMPARE(socket.preferredSecurityFlags(), QBluetooth::Security::NoSecurity);
 #endif
@@ -553,7 +542,18 @@ void tst_QBluetoothSocket::tst_unsupportedProtocolError()
     socket.connectToService(QBluetoothAddress(), 1, QIODevice::ReadWrite);
     QTRY_COMPARE_WITH_TIMEOUT(errorSpy.size(), 1, 1000);
     QCOMPARE(errorSpy.size(), 1);
+#if QT_CONFIG(bluez)
+    // Bluez dbus socket does not support connecting to port and gives different error code
+    if (bluetoothdVersion() >= QVersionNumber(5, 46)) {
+        QCOMPARE(errorSpy.takeFirst().at(0).toInt(),
+                 int(QBluetoothSocket::SocketError::ServiceNotFoundError));
+    } else {
+        QCOMPARE(errorSpy.takeFirst().at(0).toInt(),
+                 int(QBluetoothSocket::SocketError::UnsupportedProtocolError));
+    }
+#else
     QCOMPARE(errorSpy.takeFirst().at(0).toInt(), int(QBluetoothSocket::SocketError::UnsupportedProtocolError));
+#endif
     QVERIFY(socket.errorString().size() != 0);
     QCOMPARE(socket.state(), QBluetoothSocket::SocketState::UnconnectedState);
 

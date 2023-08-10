@@ -1,42 +1,6 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "hcimanager_p.h"
 
@@ -57,8 +21,8 @@ QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
-HciManager::HciManager(const QBluetoothAddress& deviceAdapter, QObject *parent) :
-    QObject(parent), hciSocket(-1), hciDev(-1)
+HciManager::HciManager(const QBluetoothAddress& deviceAdapter) :
+    QObject(nullptr), hciSocket(-1), hciDev(-1)
 {
     hciSocket = ::socket(AF_BLUETOOTH, SOCK_RAW | SOCK_CLOEXEC, BTPROTO_HCI);
     if (hciSocket < 0) {
@@ -208,7 +172,7 @@ bool HciManager::sendCommand(QBluezConst::OpCodeGroupField ogf, QBluezConst::OpC
     quint8 packetType = HCI_COMMAND_PKT;
     hci_command_hdr command = {
         opCodePack(ogf, ocf),
-        static_cast<uint8_t>(parameters.count())
+        static_cast<uint8_t>(parameters.size())
     };
     static_assert(sizeof command == 3, "unexpected struct size");
     struct iovec iv[3];
@@ -219,7 +183,7 @@ bool HciManager::sendCommand(QBluezConst::OpCodeGroupField ogf, QBluezConst::OpC
     int ivn = 2;
     if (!parameters.isEmpty()) {
         iv[2].iov_base = const_cast<char *>(parameters.constData()); // const_cast is safe, since iov_base will not get modified.
-        iv[2].iov_len  = parameters.count();
+        iv[2].iov_len  = parameters.size();
         ++ivn;
     }
     while (writev(hciSocket, iv, ivn) < 0) {
@@ -428,9 +392,8 @@ bool HciManager::sendConnectionParameterUpdateRequest(quint16 handle,
 void HciManager::_q_readNotify()
 {
     unsigned char buffer[qMax<int>(HCI_MAX_EVENT_SIZE, sizeof(AclData))];
-    int size;
 
-    size = ::read(hciSocket, buffer, sizeof(buffer));
+    const auto size = ::read(hciSocket, buffer, sizeof(buffer));
     if (size < 0) {
         if (errno != EAGAIN && errno != EINTR)
             qCWarning(QT_BT_BLUEZ) << "Failed reading HCI events:" << qt_error_string(errno);
@@ -561,9 +524,11 @@ void HciManager::handleHciAclPacket(const quint8 *data, int size)
 
 void HciManager::handleLeMetaEvent(const quint8 *data)
 {
-    // Spec v4.2, Vol 2, part E, 7.7.65ff
+    // Spec v5.3, Vol 4, part E, 7.7.65.*
     switch (*data) {
-    case 0x1: {
+    case 0x1: // HCI_LE_Connection_Complete
+    case 0xA: // HCI_LE_Enhanced_Connection_Complete
+    {
         const quint16 handle = bt_get_le16(data + 2);
         emit connectionComplete(handle);
         break;
@@ -595,3 +560,5 @@ void HciManager::handleLeMetaEvent(const quint8 *data)
 }
 
 QT_END_NAMESPACE
+
+#include "moc_hcimanager_p.cpp"

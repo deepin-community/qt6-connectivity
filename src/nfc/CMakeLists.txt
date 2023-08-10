@@ -18,6 +18,7 @@ qt_internal_add_module(Nfc
     PUBLIC_LIBRARIES
         Qt::Core
         Qt::Network
+    GENERATE_CPP_EXPORTS
 )
 
 #### Keys ignored in scope 1:.:.:nfc.pro:<TRUE>:
@@ -54,6 +55,7 @@ if(IOS)
     # special case begin
     set(NFC_BACKEND_AVAILABLE ON)
     qt_disable_apple_app_extension_api_only(Nfc)
+    qt_internal_find_apple_system_framework(FWCoreNFC CoreNFC)
     # special case end
 endif()
 
@@ -64,6 +66,29 @@ qt_internal_extend_target(Nfc CONDITION IOS
         qnearfieldtarget_ios.mm qnearfieldtarget_ios_p.h
     DEFINES
         IOS_NFC
+    LIBRARIES
+        ${FWCoreNFC}
+)
+
+if(QT_FEATURE_pcsclite)
+    set(NFC_BACKEND_AVAILABLE ON)
+endif()
+
+qt_internal_extend_target(Nfc CONDITION QT_FEATURE_pcsclite
+    SOURCES
+        qnearfieldmanager_pcsc.cpp qnearfieldmanager_pcsc_p.h
+        qnearfieldtarget_pcsc.cpp qnearfieldtarget_pcsc_p.h
+        qapduutils.cpp qapduutils_p.h
+        pcsc/qpcsc.cpp pcsc/qpcsc_p.h
+        pcsc/qpcscmanager.cpp pcsc/qpcscmanager_p.h
+        pcsc/qpcscslot.cpp pcsc/qpcscslot_p.h
+        pcsc/qpcsccard.cpp pcsc/qpcsccard_p.h
+        ndef/qndefaccessfsm_p.h
+        ndef/qnfctagtype4ndeffsm.cpp ndef/qnfctagtype4ndeffsm_p.h
+    DEFINES
+        PCSC_NFC
+    LIBRARIES
+        PkgConfig::PCSCLITE
 )
 
 #### Keys ignored in scope 2:.:.:nfc.pro:ANDROID AND NOT ANDROID_EMBEDDED:

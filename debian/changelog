@@ -1,12 +1,147 @@
-qt6-connectivity (6.2.4.1-1+dde) stable; urgency=medium
+qt6-connectivity (6.4.2-4) unstable; urgency=medium
 
-  * Adapt to V23.
-  * Update symbols. 
+  * Team upload to unstable.
 
- -- Lu YaNing <luyaning@uniontech.com>  Sun, 09 Oct 2022 14:57:07 +0800
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Tue, 01 Aug 2023 13:27:59 -0300
 
-qt6-connectivity (6.2.4-1+dde) stable; urgency=medium
+qt6-connectivity (6.4.2-3) experimental; urgency=medium
 
-  * ['Rebuild  against by  current gcc 11.2']
+  * Team upload to experimental.
 
- -- Deepin Packages Builder <packages@deepin.org>  Wed, 31 Aug 2022 14:54:59 +0800
+  [ Patrick Franz ]
+  * Remove build-dependency on libqt6opengl6-dev as it has been merged
+    into qt6-base-dev.
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Add documentation and examples packages (Closes: #1042273).
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Fri, 28 Jul 2023 17:21:31 -0300
+
+qt6-connectivity (6.4.2-2) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Pass QT_HOST_PATH to cmake in cross-builds, thx to Helmut Grohne
+    (Closes: #1033647).
+
+ -- Patrick Franz <deltaone@debian.org>  Tue, 13 Jun 2023 00:38:39 +0200
+
+qt6-connectivity (6.4.2-1) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Switch to the official 6.4.2 tarball, the tarball is the same.
+  * Enable link time optimization.
+
+ -- Patrick Franz <deltaone@debian.org>  Sun, 22 Jan 2023 11:20:28 +0100
+
+qt6-connectivity (6.4.2~rc1-2) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Upload to unstable.
+
+ -- Patrick Franz <deltaone@debian.org>  Fri, 30 Dec 2022 16:58:12 +0100
+
+qt6-connectivity (6.4.2~rc1-1) experimental; urgency=medium
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * New upstream release.
+    - Bump Qt build dependencies.
+  * Bump standards version to 4.6.2. No changes required.
+
+ -- Patrick Franz <deltaone@debian.org>  Tue, 27 Dec 2022 22:26:18 +0100
+
+qt6-connectivity (6.4.1-1) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * New upstream release (6.4.1).
+  * Bump Qt B-Ds to 6.4.1.
+
+ -- Patrick Franz <deltaone@debian.org>  Thu, 17 Nov 2022 19:37:17 +0100
+
+qt6-connectivity (6.4.0-2) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * Update symbols from buildlogs.
+
+ -- Patrick Franz <deltaone@debian.org>  Tue, 18 Oct 2022 23:42:49 +0200
+
+qt6-connectivity (6.4.0-1) experimental; urgency=medium
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Bump minimum CMake version in order to get pkg-config's .pc files.
+
+  [ Patrick Franz ]
+  * Increase CMake verbosity level.
+  * New upstream release (6.4.0).
+  * Bump Qt B-Ds to 6.4.0.
+  * Update list of installed files.
+  * Update symbols from buildlogs.
+
+ -- Patrick Franz <deltaone@debian.org>  Sat, 15 Oct 2022 18:42:12 +0200
+
+qt6-connectivity (6.3.1-2) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Upload to unstable.
+
+ -- Patrick Franz <deltaone@debian.org>  Mon, 15 Aug 2022 19:22:29 +0200
+
+qt6-connectivity (6.3.1-1) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * New upstream release (6.3.1).
+  * Bump Qt B-Ds to 6.3.1.
+  * Bump Standards-Version to 4.6.1 (no changes needed).
+  * Update list of installed files.
+
+ -- Patrick Franz <deltaone@debian.org>  Sun, 17 Jul 2022 11:42:35 +0200
+
+qt6-connectivity (6.3.0-1) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * New upstream release (6.3.0).
+  * Bump Qt B-Ds to 6.3.0.
+  * Update list of installed files.
+  * Update symbols from buildlogs.
+
+ -- Patrick Franz <deltaone@debian.org>  Wed, 15 Jun 2022 00:24:21 +0200
+
+qt6-connectivity (6.2.4-2) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Upload to unstable.
+
+ -- Patrick Franz <deltaone@debian.org>  Fri, 22 Apr 2022 20:06:29 +0200
+
+qt6-connectivity (6.2.4-1) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * New upstream release (6.2.4).
+  * Bump Qt B-Ds to 6.2.4.
+
+ -- Patrick Franz <deltaone@debian.org>  Wed, 30 Mar 2022 22:00:04 +0200
+
+qt6-connectivity (6.2.2-2) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Upload to unstable.
+
+ -- Patrick Franz <deltaone@debian.org>  Tue, 15 Feb 2022 22:35:59 +0100
+
+qt6-connectivity (6.2.2-1) experimental; urgency=medium
+
+  [ Lu YaNing ]
+  * Update descriptions.
+  * Update symbols.
+
+  [ Patrick Franz ]
+  * New upstream release (6.2.2).
+  * Bump Qt B-Ds to 6.2.2.
+  * Update installed files.
+
+ -- Patrick Franz <deltaone@debian.org>  Fri, 03 Dec 2021 16:55:23 +0100
+
+qt6-connectivity (6.2.1-1) experimental; urgency=medium
+
+  * Initial release (Closes: #999633)
+
+ -- Patrick Franz <deltaone@debian.org>  Sun, 14 Nov 2021 22:58:10 +0100
