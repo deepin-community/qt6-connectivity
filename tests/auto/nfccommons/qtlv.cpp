@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtNfc module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qtlv_p.h"
 
@@ -140,7 +104,7 @@ bool QTlvReader::atEnd() const
     if (m_requestId.isValid())
         return false;
 
-    return (m_index == m_tlvData.length()) || (tag() == 0xfe);
+    return (m_index == m_tlvData.size()) || (tag() == 0xfe);
 }
 
 /*!
@@ -240,8 +204,8 @@ QByteArray QTlvReader::data()
 
 bool QTlvReader::readMoreData(int sparseOffset)
 {
-    while (sparseOffset >= m_tlvData.length()) {
-        int absOffset = absoluteOffset(m_tlvData.length());
+    while (sparseOffset >= m_tlvData.size()) {
+        int absOffset = absoluteOffset(m_tlvData.size());
 
         QByteArray data;
 
@@ -272,7 +236,7 @@ bool QTlvReader::readMoreData(int sparseOffset)
             }
         }
 
-        if (data.isEmpty() && sparseOffset >= m_tlvData.length())
+        if (data.isEmpty() && sparseOffset >= m_tlvData.size())
             return false;
 
         m_tlvData.append(data);
@@ -343,7 +307,7 @@ void QTlvWriter::writeTlv(quint8 tagType, const QByteArray &data)
     m_buffer.append(tagType);
 
     if (tagType != 0x00 && tagType != 0xfe) {
-        int length = data.length();
+        int length = data.size();
         if (length < 0xff) {
             m_buffer.append(quint8(length));
         } else {
@@ -389,7 +353,7 @@ bool QTlvWriter::process(bool all)
 
     if (m_tagMemorySize == -1) {
         if (m_rawData)
-            m_tagMemorySize = m_rawData->length();
+            m_tagMemorySize = m_rawData->size();
         else if (QNearFieldTagType1 *tag = qobject_cast<QNearFieldTagType1 *>(m_target)) {
             if (m_requestId.isValid()) {
                 m_tagMemorySize = 8 * (tag->requestResponse(m_requestId).toUInt() + 1);
@@ -406,7 +370,7 @@ bool QTlvWriter::process(bool all)
         if (spaceRemaining < 1)
             return false;
 
-        int length = qMin(spaceRemaining, m_buffer.length());
+        int length = qMin(spaceRemaining, m_buffer.size());
 
         if (m_rawData) {
             m_rawData->replace(m_index, length, m_buffer);
@@ -458,8 +422,8 @@ bool QTlvWriter::process(bool all)
 
             int fillLength = qMin(nextBlockStart - m_index, spaceRemaining - bufferIndex);
 
-            if (fillLength && (all || m_buffer.length() - bufferIndex >= fillLength) &&
-                (m_buffer.length() != bufferIndex)) {
+            if (fillLength && (all || m_buffer.size() - bufferIndex >= fillLength) &&
+                (m_buffer.size() != bufferIndex)) {
                 // sufficient data available
                 if (m_requestId.isValid()) {
                     const QVariant v = tag->requestResponse(m_requestId);
@@ -467,7 +431,7 @@ bool QTlvWriter::process(bool all)
                         // read in block
                         QByteArray block = v.toByteArray();
 
-                        int fill = qMin(fillLength, m_buffer.length() - bufferIndex);
+                        int fill = qMin(fillLength, m_buffer.size() - bufferIndex);
 
                         for (int i = m_index - currentBlockStart; i < fill; ++i)
                             block[i] = m_buffer.at(bufferIndex++);
@@ -477,7 +441,7 @@ bool QTlvWriter::process(bool all)
                         return false;
                     } else if (v.typeId() == QMetaType::Bool) {
                         m_requestId = QNearFieldTarget::RequestId();
-                        int fill = qMin(fillLength, m_buffer.length() - bufferIndex);
+                        int fill = qMin(fillLength, m_buffer.size() - bufferIndex);
                         bufferIndex = fill - (m_index - currentBlockStart);
 
                         // write complete

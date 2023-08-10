@@ -1,0 +1,8 @@
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/bluetooth/btchat/btchat
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/bluetooth/btscanner/btscanner
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/bluetooth/heartrate-game/heartrate-game
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/bluetooth/heartrate-server/heartrate-server
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/bluetooth/lowenergyscanner/lowenergyscanner
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/bluetooth/pingpong/pingpong
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/nfc/annotatedurl/annotatedurl
+usr/lib/${DEB_HOST_MULTIARCH}/qt6/examples/nfc/ndefeditor/ndefeditor

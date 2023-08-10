@@ -1,42 +1,6 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include <QtCore/QCoreApplication>
 #include <QtCore/QPointer>
@@ -52,6 +16,11 @@
 #endif // Q_OS_DARWIN
 
 QT_BEGIN_NAMESPACE
+
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyService::ServiceError, QLowEnergyService__ServiceError)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyService::ServiceState, QLowEnergyService__ServiceState)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyService::ServiceType, QLowEnergyService__ServiceType)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QLowEnergyService::WriteMode, QLowEnergyService__WriteMode)
 
 /*!
     \class QLowEnergyService
@@ -199,20 +168,19 @@ QT_BEGIN_NAMESPACE
                                     the service while it was not yet in the
                                     \l ServiceDiscovered \l state() or the service is invalid
                                     due to a loss of connection to the peripheral device.
-    \value CharacteristicReadError  An attempt to read a characteristic value failed. For example,
-                                    it might be triggered in response to a call to
-                                    \l readCharacteristic(). This value was introduced by Qt 5.5.
+    \value [since 5.5] CharacteristicReadError  An attempt to read a characteristic value failed.
+                                                For example, it might be triggered in response
+                                                to a call to \l readCharacteristic().
     \value CharacteristicWriteError An attempt to write a new value to a characteristic
                                     failed. For example, it might be triggered when attempting
                                     to write to a read-only characteristic.
-    \value DescriptorReadError      An attempt to read a descriptor value failed. For example,
-                                    it might be triggered in response to a call to
-                                    \l readDescriptor(). This value was introduced by Qt 5.5.
+    \value [since 5.5] DescriptorReadError      An attempt to read a descriptor value failed.
+                                                For example, it might be triggered in response
+                                                to a call to \l readDescriptor().
     \value DescriptorWriteError     An attempt to write a new value to a descriptor
                                     failed. For example, it might be triggered when attempting
                                     to write to a read-only descriptor.
-    \value UnknownError             An unknown error occurred when interacting with the service.
-                                    This value was introduced by Qt 5.5.
+    \value [since 5.5] UnknownError An unknown error occurred when interacting with the service.
  */
 
 /*!
@@ -231,10 +199,9 @@ QT_BEGIN_NAMESPACE
                                       \l serviceUuid() and \l serviceName().
     \value RemoteServiceDiscovering   The service details are being discovered.
     \value RemoteServiceDiscovered    The service details have been discovered.
-    \value LocalService               The service is associated with a controller object in the
+    \value [since 5.7] LocalService   The service is associated with a controller object in the
                                       \l{QLowEnergyController::PeripheralRole}{peripheral role}.
                                       Such service objects do not change their state.
-                                      This value was introduced by Qt 5.7.
     \value DiscoveryRequired          Deprecated. Was renamed to RemoteService.
     \value DiscoveringService         Deprecated. Was renamed to RemoteServiceDiscovering.
     \value ServiceDiscovered          Deprecated. Was renamed to RemoteServiceDiscovered.
@@ -284,17 +251,16 @@ QT_BEGIN_NAMESPACE
                                 write operation as it may happen in between other
                                 device interactions.
 
-  \value WriteSigned            If a characteristic is written using this mode, the remote peripheral
-                                shall not send a write confirmation. The operation's success
-                                cannot be determined and the payload must not be longer than 8 bytes.
-                                A bond must exist between the two devices and the link must not be
-                                encrypted.
-                                A characteristic must have set the
-                                \l QLowEnergyCharacteristic::WriteSigned property to support this
-                                write mode.
-                                This value was introduced in Qt 5.7 and is currently only
-                                supported on Android and on Linux with BlueZ 5 and a kernel version
-                                3.7 or newer.
+  \value [since 5.7] WriteSigned    If a characteristic is written using this mode, the remote
+                                    peripheral shall not send a write confirmation. The operation's
+                                    success cannot be determined and the payload must not be longer
+                                    than 8 bytes. A bond must exist between the two devices and the
+                                    link must not be encrypted.
+                                    A characteristic must have set the
+                                    \l QLowEnergyCharacteristic::WriteSigned property to support
+                                    this write mode.
+                                    This value is currently only supported on Android and on Linux
+                                    with BlueZ 5 and a kernel version 3.7 or newer.
  */
 
 /*!
@@ -320,7 +286,7 @@ QT_BEGIN_NAMESPACE
 
     This signal is emitted when the read request for \a characteristic successfully returned
     its \a value. The signal might be triggered by calling \l characteristicRead(). If
-    the read operation is not successful, the \l error() signal is emitted using the
+    the read operation is not successful, the \l errorOccurred() signal is emitted using the
     \l CharacteristicReadError flag.
 
     \note This signal is only emitted for Central Role related use cases.
@@ -335,13 +301,13 @@ QT_BEGIN_NAMESPACE
     This signal is emitted when the value of \a characteristic
     is successfully changed to \a newValue. The change must have been triggered
     by calling \l writeCharacteristic(). If the write operation is not successful,
-    the \l error() signal is emitted using the \l CharacteristicWriteError flag.
+    the \l errorOccurred() signal is emitted using the \l CharacteristicWriteError flag.
 
     The reception of the written signal can be considered as a sign that the target device
     received the to-be-written value and reports back the status of write request.
 
     \note If \l writeCharacteristic() is called using the \l WriteWithoutResponse mode,
-    this signal and the \l error() are never emitted.
+    this signal and the \l errorOccurred() are never emitted.
 
     \note This signal is only emitted for Central Role related use cases.
 
@@ -373,7 +339,7 @@ QT_BEGIN_NAMESPACE
 
     This signal is emitted when the read request for \a descriptor successfully returned
     its \a value. The signal might be triggered by calling \l descriptorRead(). If
-    the read operation is not successful, the \l error() signal is emitted using the
+    the read operation is not successful, the \l errorOccurred() signal is emitted using the
     \l DescriptorReadError flag.
 
     \note This signal is only emitted for Central Role related use cases.
@@ -540,7 +506,7 @@ QList<QLowEnergyCharacteristic> QLowEnergyService::characteristics() const
     QList<QLowEnergyHandle> handles = d_ptr->characteristicList.keys();
     std::sort(handles.begin(), handles.end());
 
-    for (const QLowEnergyHandle &handle : qAsConst(handles)) {
+    for (const QLowEnergyHandle &handle : std::as_const(handles)) {
         QLowEnergyCharacteristic characteristic(d_ptr, handle);
         results.append(characteristic);
     }
@@ -882,3 +848,5 @@ void QLowEnergyService::writeDescriptor(const QLowEnergyDescriptor &descriptor,
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qlowenergyservice.cpp"

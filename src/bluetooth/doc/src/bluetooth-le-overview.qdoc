@@ -1,29 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2017 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the documentation of the Qt local connectivty modules.
-**
-** $QT_BEGIN_LICENSE:FDL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Free Documentation License Usage
-** Alternatively, this file may be used under the terms of the GNU Free
-** Documentation License version 1.3 as published by the Free Software
-** Foundation and appearing in the file included in the packaging of
-** this file. Please review the following information to ensure
-** the GNU Free Documentation License version 1.3 requirements
-** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2017 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GFDL-1.3-no-invariants-only
 
 /*!
 \ingroup technology-apis
@@ -146,7 +122,7 @@ Low Energy devices.
     The example above uses the UUIDs \c 0x2A08 (Date Time) and \c 0x2A37 (Heart Rate Measurement).
     Each of the above UUIDs is defined by the \l {https://bluetooth.org}{Bluetooth Special Interest Group}.
     and can be found in the
-    \l{https://developer.bluetooth.org/gatt/Pages/default.aspx}{GATT specification}. While it
+    \l{https://www.bluetooth.com/specifications/assigned-numbers}{GATT specifications}. While it
     is advisable to use pre-defined UUIDs where available it is entirely possible to use new and not
     yet used UUIDs for characteristic and service types.
 
@@ -197,8 +173,8 @@ Low Energy devices.
 
     \section2 Service Search
 
-    The above code snippet how the application initiates the service discovery once the connection has
-    been established.
+    The above code snippet shows how the application initiates the service discovery once the
+    connection has been established.
 
     The \c serviceDiscovered() slot below is triggered as a result of the
     \l {QLowEnergyController::serviceDiscovered()} signal and provides an intermittent progress report.
@@ -286,4 +262,11 @@ Low Energy devices.
 
     In general characteristic and descriptor value updates on the peripheral device use the same
     methods as connecting Bluetooth Low Energy devices.
+
+    \note To use QtBluetooth (in both central and peripheral roles) on iOS, you have to provide
+    an Info.plist file containing the usage description. According to the CoreBluetooth's
+    documentation: \e {Your app will crash if its Info.plist doesn’t include usage description
+    keys for the types of data it needs to access. To access Core Bluetooth APIs on apps linked
+    on or after iOS 13, include the NSBluetoothAlwaysUsageDescription key. In iOS 12 and earlier,
+    include NSBluetoothPeripheralUsageDescription to access Bluetooth peripheral data.}
 */

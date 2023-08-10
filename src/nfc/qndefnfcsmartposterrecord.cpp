@@ -1,41 +1,5 @@
-/***************************************************************************
- **
- ** Copyright (C) 2016 - 2012 Research In Motion
- ** Contact: https://www.qt.io/licensing/
- **
- ** This file is part of the QtNfc module of the Qt Toolkit.
- **
- ** $QT_BEGIN_LICENSE:LGPL$
- ** Commercial License Usage
- ** Licensees holding valid commercial Qt licenses may use this file in
- ** accordance with the commercial license agreement provided with the
- ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and The Qt Company. For licensing terms
- ** and conditions see https://www.qt.io/terms-conditions. For further
- ** information use the contact form at https://www.qt.io/contact-us.
- **
- ** GNU Lesser General Public License Usage
- ** Alternatively, this file may be used under the terms of the GNU Lesser
- ** General Public License version 3 as published by the Free Software
- ** Foundation and appearing in the file LICENSE.LGPL3 included in the
- ** packaging of this file. Please review the following information to
- ** ensure the GNU Lesser General Public License version 3 requirements
- ** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
- **
- ** GNU General Public License Usage
- ** Alternatively, this file may be used under the terms of the GNU
- ** General Public License version 2.0 or (at your option) the GNU General
- ** Public license version 3 or any later version approved by the KDE Free
- ** Qt Foundation. The licenses are as published by the Free Software
- ** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
- ** included in the packaging of this file. Please review the following
- ** information to ensure the GNU General Public License requirements will
- ** be met: https://www.gnu.org/licenses/gpl-2.0.html and
- ** https://www.gnu.org/licenses/gpl-3.0.html.
- **
- ** $QT_END_LICENSE$
- **
- ****************************************************************************/
+// Copyright (C) 2016 - 2012 Research In Motion
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include <qndefnfcsmartposterrecord.h>
 #include "qndefnfcsmartposterrecord_p.h"
@@ -243,7 +207,7 @@ void QNdefNfcSmartPosterRecord::convertToPayload()
  */
 bool QNdefNfcSmartPosterRecord::hasTitle(const QString &locale) const
 {
-    for (qsizetype i = 0; i < d->m_titleList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_titleList.size(); ++i) {
         const QNdefNfcTextRecord &text = d->m_titleList[i];
 
         if (locale.isEmpty() || text.locale() == locale)
@@ -270,7 +234,7 @@ bool QNdefNfcSmartPosterRecord::hasAction() const
  */
 bool QNdefNfcSmartPosterRecord::hasIcon(const QByteArray &mimetype) const
 {
-    for (qsizetype i = 0; i < d->m_iconList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_iconList.size(); ++i) {
         const QNdefNfcIconRecord &icon = d->m_iconList[i];
 
         if (mimetype.isEmpty() || icon.type() == mimetype)
@@ -303,7 +267,7 @@ bool QNdefNfcSmartPosterRecord::hasTypeInfo() const
  */
 qsizetype QNdefNfcSmartPosterRecord::titleCount() const
 {
-    return d->m_titleList.length();
+    return d->m_titleList.size();
 }
 
 /*!
@@ -313,7 +277,7 @@ qsizetype QNdefNfcSmartPosterRecord::titleCount() const
  */
 QNdefNfcTextRecord QNdefNfcSmartPosterRecord::titleRecord(qsizetype index) const
 {
-    if (index >= 0 && index < d->m_titleList.length())
+    if (index >= 0 && index < d->m_titleList.size())
         return d->m_titleList[index];
 
     return QNdefNfcTextRecord();
@@ -326,7 +290,7 @@ QNdefNfcTextRecord QNdefNfcSmartPosterRecord::titleRecord(qsizetype index) const
  */
 QString QNdefNfcSmartPosterRecord::title(const QString &locale) const
 {
-    for (qsizetype i = 0; i < d->m_titleList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_titleList.size(); ++i) {
         const QNdefNfcTextRecord &text = d->m_titleList[i];
 
         if (locale.isEmpty() || text.locale() == locale)
@@ -362,7 +326,7 @@ bool QNdefNfcSmartPosterRecord::addTitle(const QNdefNfcTextRecord &text)
 
 bool QNdefNfcSmartPosterRecord::addTitleInternal(const QNdefNfcTextRecord &text)
 {
-    for (qsizetype i = 0; i < d->m_titleList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_titleList.size(); ++i) {
         const QNdefNfcTextRecord &rec = d->m_titleList[i];
 
         if (rec.locale() == text.locale())
@@ -397,7 +361,7 @@ bool QNdefNfcSmartPosterRecord::removeTitle(const QNdefNfcTextRecord &text)
 {
     bool status = false;
 
-    for (qsizetype i = 0; i < d->m_titleList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_titleList.size(); ++i) {
         const QNdefNfcTextRecord &rec = d->m_titleList[i];
 
         if (rec.text() == text.text() && rec.locale() == text.locale() && rec.encoding() == text.encoding()) {
@@ -423,7 +387,7 @@ bool QNdefNfcSmartPosterRecord::removeTitle(const QString &locale)
 {
     bool status = false;
 
-    for (qsizetype i = 0; i < d->m_titleList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_titleList.size(); ++i) {
         const QNdefNfcTextRecord &rec = d->m_titleList[i];
 
         if (rec.locale() == locale) {
@@ -447,7 +411,7 @@ void QNdefNfcSmartPosterRecord::setTitles(const QList<QNdefNfcTextRecord> &title
 {
     d->m_titleList.clear();
 
-    for (qsizetype i = 0; i < titles.length(); ++i) {
+    for (qsizetype i = 0; i < titles.size(); ++i) {
         d->m_titleList.append(titles[i]);
     }
 
@@ -532,7 +496,7 @@ void QNdefNfcSmartPosterRecord::setAction(Action act)
  */
 qsizetype QNdefNfcSmartPosterRecord::iconCount() const
 {
-    return d->m_iconList.length();
+    return d->m_iconList.size();
 }
 
 /*!
@@ -542,7 +506,7 @@ qsizetype QNdefNfcSmartPosterRecord::iconCount() const
  */
 QNdefNfcIconRecord QNdefNfcSmartPosterRecord::iconRecord(qsizetype index) const
 {
-    if (index >= 0 && index < d->m_iconList.length())
+    if (index >= 0 && index < d->m_iconList.size())
         return d->m_iconList[index];
 
     return QNdefNfcIconRecord();
@@ -554,7 +518,7 @@ QNdefNfcIconRecord QNdefNfcSmartPosterRecord::iconRecord(qsizetype index) const
  */
 QByteArray QNdefNfcSmartPosterRecord::icon(const QByteArray& mimetype) const
 {
-    for (qsizetype i = 0; i < d->m_iconList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_iconList.size(); ++i) {
         const QNdefNfcIconRecord &icon = d->m_iconList[i];
 
         if (mimetype.isEmpty() || icon.type() == mimetype)
@@ -586,7 +550,7 @@ void QNdefNfcSmartPosterRecord::addIcon(const QNdefNfcIconRecord &icon)
 
 void QNdefNfcSmartPosterRecord::addIconInternal(const QNdefNfcIconRecord &icon)
 {
-    for (qsizetype i = 0; i < d->m_iconList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_iconList.size(); ++i) {
         const QNdefNfcIconRecord &rec = d->m_iconList[i];
 
         if (rec.type() == icon.type())
@@ -618,7 +582,7 @@ bool QNdefNfcSmartPosterRecord::removeIcon(const QNdefNfcIconRecord &icon)
 {
     bool status = false;
 
-    for (qsizetype i = 0; i < d->m_iconList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_iconList.size(); ++i) {
         const QNdefNfcIconRecord &rec = d->m_iconList[i];
 
         if (rec.type() == icon.type() && rec.data() == icon.data()) {
@@ -644,7 +608,7 @@ bool QNdefNfcSmartPosterRecord::removeIcon(const QByteArray &type)
 {
     bool status = false;
 
-    for (qsizetype i = 0; i < d->m_iconList.length(); ++i) {
+    for (qsizetype i = 0; i < d->m_iconList.size(); ++i) {
         const QNdefNfcIconRecord &rec = d->m_iconList[i];
 
         if (rec.type() == type) {
@@ -671,7 +635,7 @@ void QNdefNfcSmartPosterRecord::setIcons(const QList<QNdefNfcIconRecord> &icons)
 {
     d->m_iconList.clear();
 
-    for (qsizetype i = 0; i < icons.length(); ++i) {
+    for (qsizetype i = 0; i < icons.size(); ++i) {
         d->m_iconList.append(icons[i]);
     }
 

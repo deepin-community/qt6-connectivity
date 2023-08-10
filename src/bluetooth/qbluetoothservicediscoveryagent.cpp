@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothhostinfo.h"
 #include "qbluetoothlocaldevice.h"
@@ -99,9 +63,12 @@ QT_BEGIN_NAMESPACE
     \value NoError          No error has occurred.
     \value PoweredOffError  The Bluetooth adaptor is powered off, power it on before doing discovery.
     \value InputOutputError    Writing or reading from the device resulted in an error.
-    \value InvalidBluetoothAdapterError The passed local adapter address does not match the physical
-                                        adapter address of any local Bluetooth device. This value
-                                        was introduced by Qt 5.3.
+    \value [since 5.3] InvalidBluetoothAdapterError The passed local adapter address does not
+                                                    match the physical adapter address of any
+                                                    local Bluetooth device.
+    \value [since 6.4] MissingPermissionsError  The operating system requests
+                                                permissions which were not
+                                                granted by the user.
     \value UnknownError     An unknown error has occurred.
 */
 
@@ -136,7 +103,7 @@ QT_BEGIN_NAMESPACE
 
     Unlike the \l QBluetoothDeviceDiscoveryAgent::finished() signal this
     signal will even be emitted when an error occurred during the service discovery. Therefore
-    it is recommended to check the \l error() signal to evaluate the success of the
+    it is recommended to check the \l errorOccurred() signal to evaluate the success of the
     service discovery discovery.
 */
 
@@ -341,6 +308,9 @@ void QBluetoothServiceDiscoveryAgent::start(DiscoveryMode mode)
         d->foundHostAdapterPath.clear();
 #endif
         d->setDiscoveryMode(mode);
+        // Clear any possible previous errors
+        d->error = QBluetoothServiceDiscoveryAgent::NoError;
+        d->errorString.clear();
         if (d->deviceAddress.isNull()) {
             d->startDeviceDiscovery();
         } else {
@@ -411,9 +381,10 @@ bool QBluetoothServiceDiscoveryAgent::isActive() const
     discovered by a scan, errors during service discovery on individual
     devices are not saved and no signals are emitted. In this case, errors are
     fairly normal as some devices may not respond to discovery or
-    may no longer be in range.  Such errors are surpressed.  If no services
+    may no longer be in range.  Such errors are suppressed.  If no services
     are returned, it can be assumed no services could be discovered.
 
+    Any possible previous errors are cleared upon restarting the discovery.
 */
 QBluetoothServiceDiscoveryAgent::Error QBluetoothServiceDiscoveryAgent::error() const
 {
@@ -425,6 +396,8 @@ QBluetoothServiceDiscoveryAgent::Error QBluetoothServiceDiscoveryAgent::error() 
 /*!
     Returns a human-readable description of the last error that occurred during the
     service discovery.
+
+    \sa error(), errorOccurred()
 */
 QString QBluetoothServiceDiscoveryAgent::errorString() const
 {
@@ -516,10 +489,10 @@ void QBluetoothServiceDiscoveryAgentPrivate::_q_deviceDiscoveryFinished()
 void QBluetoothServiceDiscoveryAgentPrivate::_q_deviceDiscovered(const QBluetoothDeviceInfo &info)
 {
     // look for duplicates, and cached entries
-    for (int i = 0; i < discoveredDevices.count(); i++) {
-        if (discoveredDevices.at(i).address() == info.address())
-            discoveredDevices.removeAt(i);
-    }
+    const auto addressEquals = [](const auto &a) {
+        return [a](const auto &info) { return info.address() == a; };
+    };
+    erase_if(discoveredDevices, addressEquals(info.address()));
     discoveredDevices.prepend(info);
 }
 
@@ -582,8 +555,7 @@ bool QBluetoothServiceDiscoveryAgentPrivate::isDuplicatedService(
         const QBluetoothServiceInfo &serviceInfo) const
 {
     //check the service is not already part of our known list
-    for (int j = 0; j < discoveredServices.count(); j++) {
-        const QBluetoothServiceInfo &info = discoveredServices.at(j);
+    for (const QBluetoothServiceInfo &info : discoveredServices) {
         if (info.device() == serviceInfo.device()
                 && info.serviceClassUuids() == serviceInfo.serviceClassUuids()
                 && info.serviceUuid() == serviceInfo.serviceUuid()

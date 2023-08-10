@@ -44,6 +44,7 @@ usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qlowenergydescriptordata.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qlowenergyservice.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qlowenergyservicedata.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qtbluetooth-config.h
+usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qtbluetoothexports.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qtbluetoothglobal.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtBluetooth/qtbluetoothversion.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/QNdefFilter
@@ -66,9 +67,12 @@ usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qndefnfcurirecord.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qndefrecord.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qnearfieldmanager.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qnearfieldtarget.h
+usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qtnfc-config.h
+usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qtnfcexports.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qtnfcglobal.h
 usr/include/${DEB_HOST_MULTIARCH}/qt6/QtNfc/qtnfcversion.h
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6/FindBlueZ.cmake
+usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6/FindPCSCLite.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothAdditionalTargetInfo.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothConfig.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothConfigVersion.cmake
@@ -77,14 +81,6 @@ usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothDependencies.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothTargets-none.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothTargets.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothVersionlessTargets.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsAdditionalTargetInfo.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsConfig.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsConfigVersion.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsConfigVersionImpl.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsDependencies.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsTargets-none.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsTargets.cmake
-usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BluetoothTools/Qt6BluetoothToolsVersionlessTargets.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6BuildInternals/StandaloneTests/QtConnectivityTestsConfig.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Nfc/Qt6NfcAdditionalTargetInfo.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Nfc/Qt6NfcConfig.cmake
@@ -100,6 +96,8 @@ usr/lib/${DEB_HOST_MULTIARCH}/libQt6Nfc.prl
 usr/lib/${DEB_HOST_MULTIARCH}/libQt6Nfc.so
 usr/lib/${DEB_HOST_MULTIARCH}/metatypes/qt6bluetooth_none_metatypes.json
 usr/lib/${DEB_HOST_MULTIARCH}/metatypes/qt6nfc_none_metatypes.json
+usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/Qt6Bluetooth.pc
+usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/Qt6Nfc.pc
 usr/lib/${DEB_HOST_MULTIARCH}/qt6/mkspecs/modules/qt_lib_bluetooth.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt6/mkspecs/modules/qt_lib_nfc.pri
 usr/share/qt6/modules/Bluetooth.json

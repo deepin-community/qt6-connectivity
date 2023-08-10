@@ -1,0 +1,9 @@
+Document: qt6-qtbluetooth-manual
+Title: Qt 6 network auth
+Author: The Qt Company Ltd
+Abstract: This is the HTML documentation for Qt 6 BlueTooth
+Section: Programming/C++
+
+Format: HTML
+Index: /usr/share/doc/qt6-connectivity-doc-html/html/qtbluetooth/qtbluetooth-index.html
+Files: /usr/share/doc/qt6-connectivity-doc-html/html/qtbluetooth/*.html

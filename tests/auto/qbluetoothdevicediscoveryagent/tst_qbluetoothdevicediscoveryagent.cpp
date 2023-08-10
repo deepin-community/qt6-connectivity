@@ -1,30 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include <QtTest/QtTest>
 
@@ -33,6 +8,7 @@
 #include <QList>
 #include <QLoggingCategory>
 
+#include "../../shared/bttestutil_p.h"
 #include <private/qtbluetoothglobal_p.h>
 #include <qbluetoothaddress.h>
 #include <qbluetoothdevicediscoveryagent.h>
@@ -54,6 +30,11 @@ const int MaxScanTime = 5 * 60 * 1000;  // 5 minutes in ms
 
 //Bluez needs at least 10s for a device discovery to be cancelled
 const int MaxWaitForCancelTime = 15 * 1000;  // 15 seconds in ms
+
+#ifdef Q_OS_ANDROID
+// Android is sometimes unable to cancel immediately
+const int WaitBeforeStopTime = 200;
+#endif
 
 class tst_QBluetoothDeviceDiscoveryAgent : public QObject
 {
@@ -80,7 +61,7 @@ private slots:
 
     void tst_discoveryMethods();
 private:
-    int noOfLocalDevices;
+    qsizetype noOfLocalDevices;
 };
 
 tst_QBluetoothDeviceDiscoveryAgent::tst_QBluetoothDeviceDiscoveryAgent()
@@ -97,7 +78,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::initTestCase()
 {
     qRegisterMetaType<QBluetoothDeviceInfo>();
 
-    noOfLocalDevices = QBluetoothLocalDevice::allDevices().count();
+    noOfLocalDevices = QBluetoothLocalDevice::allDevices().size();
 
     if (!noOfLocalDevices)
         return;
@@ -109,11 +90,11 @@ void tst_QBluetoothDeviceDiscoveryAgent::initTestCase()
         QVERIFY(hostModeSpy.isEmpty());
         device->powerOn();
         int connectTime = 5000;  // ms
-        while (hostModeSpy.count() < 1 && connectTime > 0) {
+        while (hostModeSpy.isEmpty() && connectTime > 0) {
             QTest::qWait(500);
             connectTime -= 500;
         }
-        QVERIFY(hostModeSpy.count() > 0);
+        QVERIFY(!hostModeSpy.isEmpty());
     }
     QBluetoothLocalDevice::HostMode hostMode= device->hostMode();
     QVERIFY(hostMode == QBluetoothLocalDevice::HostConnectable
@@ -134,7 +115,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_invalidBtAddress()
 
     discoveryAgent = new QBluetoothDeviceDiscoveryAgent(QBluetoothAddress());
     QCOMPARE(discoveryAgent->error(), QBluetoothDeviceDiscoveryAgent::NoError);
-    if (QBluetoothLocalDevice::allDevices().count() > 0) {
+    if (!QBluetoothLocalDevice::allDevices().isEmpty()) {
         discoveryAgent->start();
         QCOMPARE(discoveryAgent->isActive(), true);
     }
@@ -148,6 +129,8 @@ void tst_QBluetoothDeviceDiscoveryAgent::deviceDiscoveryDebug(const QBluetoothDe
 
 void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
     QBluetoothDeviceDiscoveryAgent discoveryAgent;
 
     QVERIFY(discoveryAgent.error() == discoveryAgent.NoError);
@@ -178,19 +161,27 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
         QSKIP("No local Bluetooth device available. Skipping remaining part of test.");
     }
     // cancel current request.
+#ifdef Q_OS_ANDROID
+    // Android sometimes can't cancel immediately (~on the same millisecond),
+    // but instead a "pending cancel" happens, which means the discovery will be
+    // canceled at a later point in time. When this happens the Android backend
+    // also emits an immediate errorOccurred(). While this seems to be as intended,
+    // as a result many parts of this test function may fail (not always).
+    //
+    // In this test function we wait some milliseconds between start() and stop() to
+    // bypass this behavior difference. This is to avoid complex iffery (Android itself
+    // can behave differently every time) and ifdeffery (Q_OS_ANDROID) in the test
+    QTest::qWait(WaitBeforeStopTime);
+#endif
     discoveryAgent.stop();
 
     // Wait for up to MaxWaitForCancelTime for the cancel to finish
-    int waitTime = MaxWaitForCancelTime;
-    while (cancelSpy.count() == 0 && waitTime > 0) {
-        QTest::qWait(100);
-        waitTime-=100;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(!cancelSpy.isEmpty(), MaxWaitForCancelTime);
 
     // we should not be active anymore
     QVERIFY(!discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
-    QCOMPARE(cancelSpy.count(), 1);
+    QCOMPARE(cancelSpy.size(), 1);
     cancelSpy.clear();
     // Starting case 2: start-start-stop, expecting cancel signal
     discoveryAgent.start();
@@ -202,19 +193,19 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
     QVERIFY(discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
     // stop
+#ifdef Q_OS_ANDROID
+    QTest::qWait(WaitBeforeStopTime);
+#endif
     discoveryAgent.stop();
 
     // Wait for up to MaxWaitForCancelTime for the cancel to finish
-    waitTime = MaxWaitForCancelTime;
-    while (cancelSpy.count() == 0 && waitTime > 0) {
-        QTest::qWait(100);
-        waitTime-=100;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(!cancelSpy.isEmpty(), MaxWaitForCancelTime);
 
     // we should not be active anymore
     QVERIFY(!discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
-    QVERIFY(cancelSpy.count() == 1);
+
+    QCOMPARE(cancelSpy.size(), 1);
     cancelSpy.clear();
 
     //  Starting case 3: stop
@@ -223,7 +214,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
     QVERIFY(errorSpy.isEmpty());
 
     // Don't expect finished signal and no error
-    QVERIFY(finishedSpy.count() == 0);
+    QVERIFY(finishedSpy.isEmpty());
     QVERIFY(discoveryAgent.error() == discoveryAgent.NoError);
     QVERIFY(discoveryAgent.errorString().isEmpty());
 
@@ -244,9 +235,12 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
     QVERIFY(discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
     // cancel current request.
+#ifdef Q_OS_ANDROID
+    QTest::qWait(WaitBeforeStopTime);
+#endif
     discoveryAgent.stop();
     //should only have triggered cancel() if stop didn't involve the event loop
-    if (cancelSpy.count() == 1) immediateSignal = true;
+    if (cancelSpy.size() == 1) immediateSignal = true;
 
     // start a new one
     discoveryAgent.start();
@@ -254,25 +248,25 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
     QVERIFY(discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
     // stop
+#ifdef Q_OS_ANDROID
+    QTest::qWait(WaitBeforeStopTime);
+#endif
     discoveryAgent.stop();
     if (immediateSignal)
-        QVERIFY(cancelSpy.count() == 2);
+        QCOMPARE(cancelSpy.size(), 2);
 
     // Wait for up to MaxWaitForCancelTime for the cancel to finish
-    waitTime = MaxWaitForCancelTime;
-    while (cancelSpy.count() == 0 && waitTime > 0) {
-        QTest::qWait(100);
-        waitTime-=100;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(!cancelSpy.isEmpty(), MaxWaitForCancelTime);
+
     // we should not be active anymore
     QVERIFY(!discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
-    // should only have 1 cancel
 
+    // should only have 1 cancel
     if (immediateSignal)
-        QVERIFY(cancelSpy.count() == 2);
+        QCOMPARE(cancelSpy.size(), 2);
     else
-        QVERIFY(cancelSpy.count() == 1);
+        QCOMPARE(cancelSpy.size(), 1);
     cancelSpy.clear();
 
     // Starting case 5: start-stop-start: expecting finished signal & no cancel
@@ -280,6 +274,9 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
     QVERIFY(discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
     // cancel current request.
+#ifdef Q_OS_ANDROID
+    QTest::qWait(WaitBeforeStopTime);
+#endif
     discoveryAgent.stop();
     // start a new one
     discoveryAgent.start();
@@ -287,18 +284,14 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_startStopDeviceDiscoveries()
     QVERIFY(discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
 
-    // Wait for up to MaxScanTime for the cancel to finish
-    waitTime = MaxScanTime;
-    while (finishedSpy.count() == 0 && waitTime > 0) {
-        QTest::qWait(1000);
-        waitTime-=1000;
-    }
+    // Wait for up to MaxScanTime for the scan to finish
+    QTRY_VERIFY_WITH_TIMEOUT(!finishedSpy.isEmpty(), MaxScanTime);
 
     // we should not be active anymore
     QVERIFY(!discoveryAgent.isActive());
     QVERIFY(errorSpy.isEmpty());
     // should only have 1 cancel
-    QVERIFY(finishedSpy.count() == 1);
+    QCOMPARE(finishedSpy.size(), 1);
 
     // On OS X, stop is synchronous (signal will be emitted immediately).
     if (!immediateSignal)
@@ -344,7 +337,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_deviceDiscovery()
 
         // Wait for up to MaxScanTime for the scan to finish
         int scanTime = MaxScanTime;
-        while (finishedSpy.count() == 0 && scanTime > 0) {
+        while (finishedSpy.isEmpty() && scanTime > 0) {
             QTest::qWait(15000);
             scanTime -= 15000;
         }
@@ -356,7 +349,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_deviceDiscovery()
         QVERIFY(!discoveryAgent.isActive());
         qDebug() << "Scan time left:" << scanTime;
         // Expect finished signal with no error
-        QVERIFY(finishedSpy.count() == 1);
+        QVERIFY(finishedSpy.size() == 1);
         QVERIFY(errorSpy.isEmpty());
         QVERIFY(discoveryAgent.error() == discoveryAgent.NoError);
         QVERIFY(discoveryAgent.errorString().isEmpty());
@@ -365,7 +358,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_deviceDiscovery()
         // discoveredSpy might have more events as some devices are found multiple times,
         // leading to messages like
         // "Almost Duplicate  "88:C6:26:F5:3E:E2" "88-C6-26-F5-3E-E2" - replacing in place"
-        QVERIFY(discoveredSpy.count() >= discoveryAgent.discoveredDevices().length());
+        QVERIFY(discoveredSpy.size() >= discoveryAgent.discoveredDevices().size());
         // verify that there really was some devices in the array
 
         const QString remote = qEnvironmentVariable("BT_TEST_DEVICE");
@@ -378,7 +371,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_deviceDiscovery()
         }
 
         if (!remoteDevice.isNull())
-            QVERIFY(discoveredSpy.count() > 0);
+            QVERIFY(!discoveredSpy.isEmpty());
         // All returned QBluetoothDeviceInfo should be valid.
         while (!discoveredSpy.isEmpty()) {
             const QBluetoothDeviceInfo info =
@@ -396,9 +389,9 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_discoveryTimeout()
     // check default values
 #if defined(Q_OS_MACOS) || defined(Q_OS_IOS) || defined(Q_OS_ANDROID) || QT_CONFIG(winrt_bt) \
     || QT_CONFIG(bluez)
-    QCOMPARE(agent.lowEnergyDiscoveryTimeout(), 25000);
+    QCOMPARE(agent.lowEnergyDiscoveryTimeout(), 40000);
     agent.setLowEnergyDiscoveryTimeout(-1); // negative ignored
-    QCOMPARE(agent.lowEnergyDiscoveryTimeout(), 25000);
+    QCOMPARE(agent.lowEnergyDiscoveryTimeout(), 40000);
     agent.setLowEnergyDiscoveryTimeout(20000);
     QCOMPARE(agent.lowEnergyDiscoveryTimeout(), 20000);
 #else
@@ -410,6 +403,9 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_discoveryTimeout()
 
 void tst_QBluetoothDeviceDiscoveryAgent::tst_discoveryMethods()
 {
+    if (androidBluetoothEmulator())
+        QSKIP("Skipping test on Android 12+ emulator, CI can timeout waiting for user input");
+
     const QBluetoothLocalDevice localDevice;
     if (localDevice.allDevices().size() != 1) {
         // On iOS it returns 0 but we still have working BT.
@@ -482,7 +478,7 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_discoveryMethods()
         QVERIFY(supportedMethods == QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
         QCOMPARE(agent.error(), QBluetoothDeviceDiscoveryAgent::UnsupportedDiscoveryMethod);
     } else {
-        QVERIFY(finishedSpy.count() == 1);
+        QVERIFY(finishedSpy.size() == 1);
         QVERIFY(agent.error() == QBluetoothDeviceDiscoveryAgent::NoError);
         QVERIFY(agent.errorString().isEmpty());
 
@@ -490,7 +486,9 @@ void tst_QBluetoothDeviceDiscoveryAgent::tst_discoveryMethods()
             const QBluetoothDeviceInfo info =
                 qvariant_cast<QBluetoothDeviceInfo>(discoveredSpy.takeFirst().at(0));
             QVERIFY(info.isValid());
-            QVERIFY(info.coreConfigurations() & expectedConfiguration);
+            // on Android we do find devices with unknown configuration
+            if (info.coreConfigurations() != QBluetoothDeviceInfo::UnknownCoreConfiguration)
+                QVERIFY(info.coreConfigurations() & expectedConfiguration);
         }
     }
 

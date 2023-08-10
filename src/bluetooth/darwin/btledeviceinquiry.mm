@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothdeviceinfo.h"
 #include "btledeviceinquiry_p.h"
@@ -83,6 +47,7 @@ struct AdvertisementData {
     QString localName;
     QList<QBluetoothUuid> serviceUuids;
     QHash<quint16, QByteArray> manufacturerData;
+    QHash<QBluetoothUuid, QByteArray> serviceData;
     // TODO: other keys probably?
     AdvertisementData(NSDictionary *AdvertisementData);
 };
@@ -106,6 +71,13 @@ AdvertisementData::AdvertisementData(NSDictionary *advertisementData)
         NSArray *uuids = static_cast<NSArray *>(value);
         for (CBUUID *cbUuid in uuids)
             serviceUuids << qt_uuid(cbUuid);
+    }
+
+    NSDictionary *advdict = [advertisementData objectForKey:CBAdvertisementDataServiceDataKey];
+    if (advdict) {
+        [advdict enumerateKeysAndObjectsUsingBlock:^(CBUUID *key, NSData *val, BOOL *) {
+            serviceData.insert(qt_uuid(key), QByteArray::fromNSData(static_cast<NSData *>(val)));
+        }];
     }
 
     value = [advertisementData objectForKey:CBAdvertisementDataManufacturerDataKey];
@@ -225,7 +197,7 @@ QT_USE_NAMESPACE
                 [manager scanForPeripheralsWithServices:nil options:nil];
             }
         } // Else we ignore.
-    } else if (state == CBManagerStateUnsupported || state == CBManagerStateUnauthorized) {
+    } else if (state == CBManagerStateUnsupported) {
         if (internalState == InquiryActive) {
             [self stopScanSafe];
             // Not sure how this is possible at all,
@@ -236,7 +208,12 @@ QT_USE_NAMESPACE
             internalState = ErrorLENotSupported;
             emit notifier->LEnotSupported();
         }
-
+        [manager setDelegate:nil];
+    } else if (state == CBManagerStateUnauthorized) {
+        if (internalState == InquiryActive)
+            [self stopScanSafe];
+        internalState = ErrorNotAuthorized;
+        emit notifier->CBManagerError(QBluetoothDeviceDiscoveryAgent::MissingPermissionsError);
         [manager setDelegate:nil];
     } else if (state == CBManagerStatePoweredOff) {
 
@@ -359,9 +336,13 @@ QT_USE_NAMESPACE
     if (qtAdvData.serviceUuids.size())
         newDeviceInfo.setServiceUuids(qtAdvData.serviceUuids);
 
-    const QList<quint16> keys = qtAdvData.manufacturerData.keys();
-    for (quint16 key : keys)
+    const QList<quint16> keysManufacturer = qtAdvData.manufacturerData.keys();
+    for (quint16 key : keysManufacturer)
         newDeviceInfo.setManufacturerData(key, qtAdvData.manufacturerData.value(key));
+
+    const QList<QBluetoothUuid> keysService = qtAdvData.serviceData.keys();
+    for (QBluetoothUuid key : keysService)
+        newDeviceInfo.setServiceData(key, qtAdvData.serviceData.value(key));
 
     // CoreBluetooth scans only for LE devices.
     newDeviceInfo.setCoreConfigurations(QBluetoothDeviceInfo::LowEnergyCoreConfiguration);

@@ -1,42 +1,6 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "darwin/btutility_p.h"
 #include "darwin/uistrings_p.h"
@@ -174,10 +138,10 @@ void QLowEnergyControllerPrivateDarwin::init()
         return;
     }
 
-    QScopedPointer<LECBManagerNotifier> notifier(new LECBManagerNotifier);
+    std::unique_ptr<LECBManagerNotifier> notifier = std::make_unique<LECBManagerNotifier>();
     if (role == QLowEnergyController::PeripheralRole) {
 #ifndef Q_OS_TVOS
-        peripheralManager.reset([[ObjCPeripheralManager alloc] initWith:notifier.data()],
+        peripheralManager.reset([[ObjCPeripheralManager alloc] initWith:notifier.get()],
                                 DarwinBluetooth::RetainPolicy::noInitialRetain);
         if (!peripheralManager) {
             qCWarning(QT_BT_DARWIN) << "failed to create a peripheral manager";
@@ -188,7 +152,7 @@ void QLowEnergyControllerPrivateDarwin::init()
         return;
 #endif // Q_OS_TVOS
     } else {
-        centralManager.reset([[ObjCCentralManager alloc] initWith:notifier.data()],
+        centralManager.reset([[ObjCCentralManager alloc] initWith:notifier.get()],
                              DarwinBluetooth::RetainPolicy::noInitialRetain);
         if (!centralManager) {
             qCWarning(QT_BT_DARWIN) << "failed to initialize a central manager";
@@ -196,17 +160,25 @@ void QLowEnergyControllerPrivateDarwin::init()
         }
     }
 
-    if (!connectSlots(notifier.data()))
+    if (!connectSlots(notifier.get()))
         qCWarning(QT_BT_DARWIN) << "failed to connect to notifier's signal(s)";
 
     // Ownership was taken by central manager.
-    notifier.take();
+    notifier.release();
 }
 
 void QLowEnergyControllerPrivateDarwin::connectToDevice()
 {
     Q_ASSERT_X(state == QLowEnergyController::UnconnectedState,
                Q_FUNC_INFO, "invalid state");
+
+    if (qt_appNeedsBluetoothUsageDescription()
+            && !qt_appPlistContainsDescription(bluetoothUsageKey)) {
+        qCWarning(QT_BT_DARWIN)
+                << "The Info.plist file is required to contain "
+                   "'NSBluetoothAlwaysUsageDescription' entry";
+        return _q_CBManagerError(QLowEnergyController::MissingPermissionsError);
+    }
 
     if (!isValid()) {
         // init() had failed or was never called.
@@ -702,11 +674,13 @@ void QLowEnergyControllerPrivateDarwin::_q_LEnotSupported()
 
 void QLowEnergyControllerPrivateDarwin::_q_CBManagerError(QLowEnergyController::Error errorCode)
 {
+    qCDebug(QT_BT_DARWIN) << "QLowEnergyController error:" << errorCode << "in state:" << state;
     // This function handles errors reported while connecting to a remote device
     // and also other errors in general.
     setError(errorCode);
 
-    if (state == QLowEnergyController::ConnectingState)
+    if (state == QLowEnergyController::ConnectingState
+            || state == QLowEnergyController::AdvertisingState)
         setState(QLowEnergyController::UnconnectedState);
     else if (state == QLowEnergyController::DiscoveringState)
         setState(QLowEnergyController::ConnectedState);
@@ -1012,6 +986,9 @@ void QLowEnergyControllerPrivateDarwin::setErrorDescription(QLowEnergyController
         break;
     case QLowEnergyController::AdvertisingError:
         errorString = QLowEnergyController::tr("Error occurred trying to start advertising");
+        break;
+    case QLowEnergyController::MissingPermissionsError:
+        errorString = QLowEnergyController::tr("Error missing permission");
         break;
     case QLowEnergyController::UnknownError:
     default:

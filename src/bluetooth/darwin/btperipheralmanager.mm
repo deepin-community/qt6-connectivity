@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 
 
@@ -134,14 +98,14 @@ quint32 qt_countGATTEntries(const QLowEnergyServiceData &data)
 {
     const auto maxu32 = std::numeric_limits<quint32>::max();
     // + 1 for a service itself.
-    quint32 nEntries = 1 + quint32(data.includedServices().count());
+    quint32 nEntries = 1 + quint32(data.includedServices().size());
     for (const auto &ch : data.characteristics()) {
         if (maxu32 - 2 < nEntries)
             return {};
         nEntries += 2;
-        if (maxu32 - ch.descriptors().count() < nEntries)
+        if (maxu32 - ch.descriptors().size() < nEntries)
             return {};
-        nEntries += ch.descriptors().count();
+        nEntries += ch.descriptors().size();
     }
 
     return nEntries;
@@ -307,7 +271,7 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
          forKey:CBAdvertisementDataLocalNameKey];
     }
 
-    if (!data.services().count() && !scanResponse.services().count())
+    if (data.services().isEmpty() && scanResponse.services().isEmpty())
         return;
 
     const ObjCScopedPointer<NSMutableArray> uuids([[NSMutableArray alloc] init],
@@ -384,7 +348,7 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
     }
 
     const auto & range = valueRanges[charHandle];
-    if (value.size() < int(range.first) || value.size() > int(range.second)
+    if (value.size() < qsizetype(range.first) || value.size() > qsizetype(range.second)
 #ifdef Q_OS_IOS
         || value.size() > DarwinBluetooth::maxValueLength) {
 #else
@@ -456,9 +420,12 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
      explicitly added again."
     */
 
-    if (peripheral.state == CBManagerStateUnauthorized || peripheral.state == CBManagerStateUnsupported) {
-        emit notifier->LEnotSupported();
+    if (peripheral.state == CBManagerStateUnsupported) {
         state = PeripheralState::idle;
+        emit notifier->LEnotSupported();
+    } else if (peripheral.state == CBManagerStateUnauthorized) {
+        state = PeripheralState::idle;
+        emit notifier->CBManagerError(QLowEnergyController::MissingPermissionsError);
     }
 
 #pragma clang diagnostic pop
@@ -695,7 +662,6 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
 
     if (state == PeripheralState::advertising) {
         state = PeripheralState::connected;
-        [manager stopAdvertising];
         emit notifier->connected();
     }
 }
@@ -767,7 +733,7 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
         }
 
 #ifdef Q_OS_IOS
-        if (ch.value().length() > DarwinBluetooth::maxValueLength) {
+        if (ch.value().size() > DarwinBluetooth::maxValueLength) {
             qCWarning(QT_BT_DARWIN) << "addCharacteristicsAndDescritptors: "
                                        "value exceeds the maximal permitted "
                                        "value length ("

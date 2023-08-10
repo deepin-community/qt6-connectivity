@@ -1,30 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2021 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtNfc module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2021 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include <QTest>
 
@@ -81,8 +56,8 @@ void tst_QNdefFilter::copyConstruct()
     QNdefFilter::Record rec = filterCopy.recordAt(1);
     QCOMPARE(rec.typeNameFormat, QNdefRecord::Empty);
     QCOMPARE(rec.type, QByteArray());
-    QCOMPARE(rec.minimum, 0);
-    QCOMPARE(rec.maximum, 1);
+    QCOMPARE(rec.minimum, 0U);
+    QCOMPARE(rec.maximum, 1U);
 }
 
 void tst_QNdefFilter::assingmentOperator()
@@ -100,8 +75,8 @@ void tst_QNdefFilter::assingmentOperator()
     QNdefFilter::Record rec = filterCopy.recordAt(1);
     QCOMPARE(rec.typeNameFormat, QNdefRecord::Empty);
     QCOMPARE(rec.type, QByteArray());
-    QCOMPARE(rec.minimum, 0);
-    QCOMPARE(rec.maximum, 1);
+    QCOMPARE(rec.minimum, 0U);
+    QCOMPARE(rec.maximum, 1U);
 }
 
 void tst_QNdefFilter::clearFilter()
@@ -153,7 +128,10 @@ void tst_QNdefFilter::appendRecord_data()
     QTest::addColumn<unsigned int>("maximum");
     QTest::addColumn<bool>("result");
 
-    const QMap<QByteArray, QNdefRecord::TypeNameFormat> inputs {
+    constexpr struct {
+        const char *type;
+        QNdefRecord::TypeNameFormat format;
+    } inputs[] = {
         { "Empty", QNdefRecord::Empty },
         { "NfcRtd", QNdefRecord::NfcRtd },
         { "Mime", QNdefRecord::Mime },
@@ -162,12 +140,11 @@ void tst_QNdefFilter::appendRecord_data()
         { "Unknown", QNdefRecord::Unknown }
     };
 
-    for (auto it = inputs.cbegin(); it != inputs.cend(); ++it) {
-        const auto type = it.key();
-        const auto format = it.value();
-        QTest::newRow(type + "; min < max") << format << type << 1u << 2u << true;
-        QTest::newRow(type + "; min == max") << format << type << 2u << 2u << true;
-        QTest::newRow(type + "; min > max") << format << type << 2u << 1u << false;
+    for (auto [typeC, format] : inputs) {
+        const auto type = QByteArray::fromRawData(typeC, strlen(typeC));
+        QTest::addRow("%s; min < max", typeC) << format << type << 1u << 2u << true;
+        QTest::addRow("%s; min == max", typeC) << format << type << 2u << 2u << true;
+        QTest::addRow("%s; min > max", typeC) << format << type << 2u << 1u << false;
     }
 }
 

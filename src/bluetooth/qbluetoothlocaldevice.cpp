@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothlocaldevice.h"
 #include "qbluetoothlocaldevice_p.h"
@@ -44,6 +8,10 @@
 #include <QtCore/QString>
 
 QT_BEGIN_NAMESPACE
+
+QT_IMPL_METATYPE_EXTERN_TAGGED(QBluetoothLocalDevice::Pairing, QBluetoothLocalDevice__Pairing)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QBluetoothLocalDevice::HostMode, QBluetoothLocalDevice__HostMode)
+QT_IMPL_METATYPE_EXTERN_TAGGED(QBluetoothLocalDevice::Error, QBluetoothLocalDevice__Error)
 
 /*!
     \class QBluetoothLocalDevice
@@ -56,7 +24,7 @@ QT_BEGIN_NAMESPACE
     QBluetoothLocalDevice provides functions for getting and setting the state of local Bluetooth
     devices.
 
-    On iOS and Windows, this class cannot be used because the platform does not expose
+    On iOS, this class cannot be used because the platform does not expose
     any data or API which may provide information on the local Bluetooth device.
 */
 
@@ -81,6 +49,9 @@ QT_BEGIN_NAMESPACE
 
   \value NoError        No known error
   \value PairingError   Error in pairing
+  \value [since 6.4] MissingPermissionsError  The operating system requests
+                                              permissions which were not
+                                              granted by the user.
   \value UnknownError   Unknown error
 
 */
@@ -102,7 +73,23 @@ QT_BEGIN_NAMESPACE
      only made discoverable for a limited period of time. This can speed up discovery between gaming devices,
      as service discovery can be skipped on devices not in LimitedInquiry mode. In this mode, the device will
      be connectable and powered on, if required. This mode is is not supported on Android.
-     On \macos, it is not possible to set the \l hostMode() to HostConnectable or HostPoweredOff.
+
+    \note On \macos, it is not possible to set the \l hostMode() to
+    HostConnectable or HostPoweredOff.
+
+    \note On Windows, it is not possible to set the \l hostMode() to
+    HostDiscoverable or HostDiscoverableLimitedInquiry. Using these modes is
+    equivalent to HostConnectable.
+
+    \note Starting from Android 13 (API level 33) the HostPoweredOff state relies on
+    non-public Android API as the public one has been deprecated, see
+    (\l {https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#disable()}
+    {disable()}). This may change in a future version of Android.
+
+    \note At least on Android 12 the device's Bluetooth visibility setting may dictate the result
+    of setting either HostDiscoverable or HostConnectable. For example if the visibility is set
+    \e off, it may not be possible to enter the HostDiscoverable mode, but HostConnectable will be
+    used instead. This may change in future version of Android.
 
 */
 
@@ -137,6 +124,13 @@ QBluetoothLocalDevice::~QBluetoothLocalDevice()
     remains invalid even if the same Bluetooth adapter is returned to
     the system.
 
+//! [android-permissions-valid]
+    \note Starting from Android 12 (API level 31), the construction of this class requires
+    \l {https://developer.android.com/guide/topics/connectivity/bluetooth/permissions}
+    {bluetooth runtime permissions} (\e BLUETOOTH_SCAN and \e BLUETOOTH_CONNECT). If the
+    permissions are not granted, the device will not be valid.
+//! [android-permissions-valid]
+
     \sa allDevices()
 */
 bool QBluetoothLocalDevice::isValid() const
@@ -163,6 +157,8 @@ bool QBluetoothLocalDevice::isValid() const
     confirmation before turning Bluetooth on or off and not all host modes may be supported.
     On \macos, it is not possbile to programmatically change the \l hostMode().
     A user can only switch Bluetooth on/off in the System Preferences.
+    On Windows this method \e must be called from the UI thread because it might
+    require user confirmation.
     Please refer to the platform specific Bluetooth documentation for details.
 */
 
@@ -211,6 +207,9 @@ bool QBluetoothLocalDevice::isValid() const
 /*!
   \fn QBluetoothLocalDevice::QBluetoothLocalDevice(QObject *parent)
     Constructs a QBluetoothLocalDevice with \a parent.
+
+  \include qbluetoothlocaldevice.cpp android-permissions-valid
+  \sa isValid()
 */
 
 /*!
@@ -264,7 +263,9 @@ bool QBluetoothLocalDevice::isValid() const
   \fn QBluetoothLocalDevice::requestPairing(const QBluetoothAddress &address, Pairing pairing)
 
   Set the \a pairing status with \a address.  The results are returned by the signal, pairingFinished().
+
   On Android and \macos, AuthorizedPaired is not possible and will have the same behavior as Paired.
+  On Windows the exact pairing mode decision is up to the operating system.
 
   On \macos, it is not possible to unpair a device. If Unpaired is requested, \l pairingFinished()
   is immediately emitted although the device remains paired. It is possible to request the pairing
@@ -296,6 +297,9 @@ bool QBluetoothLocalDevice::isValid() const
 
   Construct new QBluetoothLocalDevice for \a address. If \a address is default constructed
   the resulting local device selects the local default device.
+
+  \include qbluetoothlocaldevice.cpp android-permissions-valid
+  \sa isValid()
 */
 
 QT_END_NAMESPACE

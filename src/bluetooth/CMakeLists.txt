@@ -17,7 +17,6 @@ qt_internal_add_module(Bluetooth
         qbluetoothsocket.cpp qbluetoothsocket.h
         qbluetoothsocketbase.cpp qbluetoothsocketbase_p.h
         qbluetoothuuid.cpp qbluetoothuuid.h
-        qleadvertiser_p.h
         qlowenergyadvertisingdata.cpp qlowenergyadvertisingdata.h
         qlowenergyadvertisingparameters.cpp qlowenergyadvertisingparameters.h
         qlowenergycharacteristic.cpp qlowenergycharacteristic.h
@@ -43,6 +42,8 @@ qt_internal_add_module(Bluetooth
     PRIVATE_MODULE_INTERFACE
         Qt::CorePrivate
         Qt::NetworkPrivate
+    GENERATE_CPP_EXPORTS
+    GENERATE_PRIVATE_CPP_EXPORTS
 )
 
 #### Keys ignored in scope 1:.:.:bluetooth.pro:<TRUE>:
@@ -58,7 +59,7 @@ if(QT_FEATURE_bluez)
             bluez/battery1.cpp bluez/battery1_p.h
             bluez/bluetoothmanagement.cpp bluez/bluetoothmanagement_p.h
             bluez/bluez5_helper.cpp bluez/bluez5_helper_p.h
-            bluez/bluez_data_p.h
+            bluez/bluez_data.cpp bluez/bluez_data_p.h
             bluez/device1_bluez5.cpp bluez/device1_bluez5_p.h
             bluez/gattchar1.cpp bluez/gattchar1_p.h
             bluez/gattdesc1.cpp bluez/gattdesc1_p.h
@@ -86,7 +87,7 @@ if(QT_FEATURE_bluez)
         qt_internal_extend_target(Bluetooth
             SOURCES
                 lecmaccalculator.cpp
-                qleadvertiser_bluez.cpp
+                qleadvertiser_bluez.cpp qleadvertiser_bluez_p.h
                 qlowenergycontroller_bluez.cpp qlowenergycontroller_bluez_p.h
                 qlowenergycontroller_bluezdbus.cpp qlowenergycontroller_bluezdbus_p.h
         )
@@ -112,7 +113,13 @@ elseif(ANDROID AND NOT ANDROID_EMBEDDED)
         jar/Qt${QtConnectivity_VERSION_MAJOR}AndroidBluetooth.jar:org.qtproject.qt.android.bluetooth.QtBluetoothBroadcastReceiver
     )
     set_property(TARGET Bluetooth APPEND PROPERTY QT_ANDROID_PERMISSIONS
-        android.permission.ACCESS_FINE_LOCATION android.permission.BLUETOOTH android.permission.BLUETOOTH_ADMIN
+        android.permission.ACCESS_FINE_LOCATION
+        android.permission.BLUETOOTH
+        android.permission.BLUETOOTH_ADMIN
+        # Android 12 / SDK 31+
+        android.permission.BLUETOOTH_SCAN
+        android.permission.BLUETOOTH_ADVERTISE
+        android.permission.BLUETOOTH_CONNECT
     )
 
     qt_internal_extend_target(Bluetooth
@@ -125,6 +132,7 @@ elseif(ANDROID AND NOT ANDROID_EMBEDDED)
             android/lowenergynotificationhub.cpp android/lowenergynotificationhub_p.h
             android/serveracceptancethread.cpp android/serveracceptancethread_p.h
             android/servicediscoverybroadcastreceiver.cpp android/servicediscoverybroadcastreceiver_p.h
+            android/androidutils.cpp android/androidutils_p.h
             qbluetoothdevicediscoveryagent_android.cpp
             qbluetoothlocaldevice_android.cpp
             qbluetoothserver_android.cpp
@@ -215,14 +223,15 @@ elseif(QT_FEATURE_winrt_bt)
             qbluetoothsocket_winrt.cpp qbluetoothsocket_winrt_p.h
             qbluetoothutils_winrt.cpp qbluetoothutils_winrt_p.h
             qlowenergycontroller_winrt.cpp qlowenergycontroller_winrt_p.h
+            qbluetoothdevicewatcher_winrt.cpp qbluetoothdevicewatcher_winrt_p.h
         DEFINES
             QT_WINRT_BLUETOOTH
         LIBRARIES
             Qt::CorePrivate
         PUBLIC_LIBRARIES
             Qt::Core
-            runtimeobject.lib
-            user32.lib
+            runtimeobject
+            user32
         PRIVATE_MODULE_INTERFACE
             Qt::CorePrivate
     )

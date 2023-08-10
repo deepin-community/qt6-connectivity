@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothservicediscoveryagent.h"
 #include "qbluetoothservicediscoveryagent_p.h"
@@ -48,6 +12,8 @@
 #include <QtCore/QLibraryInfo>
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QProcess>
+#include <QtCore/QScopeGuard>
+
 #include <QtDBus/QDBusPendingCallWatcher>
 
 QT_BEGIN_NAMESPACE
@@ -165,7 +131,7 @@ void QBluetoothServiceDiscoveryAgentPrivate::runExternalSdpScan(
     // No filter implies PUBLIC_BROWSE_GROUP based SDP scan
     if (!uuidFilter.isEmpty()) {
         arguments << QLatin1String("-u"); // cmd line option for list of uuids
-        for (const QBluetoothUuid& uuid : qAsConst(uuidFilter))
+        for (const QBluetoothUuid& uuid : std::as_const(uuidFilter))
             arguments << uuid.toString();
     }
 
@@ -189,19 +155,20 @@ void QBluetoothServiceDiscoveryAgentPrivate::_q_sdpScannerDone(int exitCode, QPr
     }
 
     QStringList xmlRecords;
-    const QByteArray output = sdpScannerProcess->readAllStandardOutput();
-    const QString decodedData = QString::fromUtf8(QByteArray::fromBase64(output));
+    const QByteArray utf8Data = QByteArray::fromBase64(sdpScannerProcess->readAllStandardOutput());
+    const QByteArrayView utf8View = utf8Data;
 
     // split the various xml docs up
-    int next;
-    int start = decodedData.indexOf(QStringLiteral("<?xml"), 0);
+    constexpr auto matcher = qMakeStaticByteArrayMatcher("<?xml");
+    qsizetype next;
+    qsizetype start = matcher.indexIn(utf8View, 0);
     if (start != -1) {
         do {
-            next = decodedData.indexOf(QStringLiteral("<?xml"), start + 1);
+            next = matcher.indexIn(utf8View, start + 1);
             if (next != -1)
-                xmlRecords.append(decodedData.mid(start, next-start));
+                xmlRecords.append(QString::fromUtf8(utf8View.sliced(start, next - start)));
             else
-                xmlRecords.append(decodedData.mid(start, decodedData.size() - start));
+                xmlRecords.append(QString::fromUtf8(utf8View.sliced(start)));
             start = next;
         } while ( start != -1);
     }
@@ -318,7 +285,7 @@ QBluetoothServiceInfo QBluetoothServiceDiscoveryAgentPrivate::parseServiceXml(
         if (xml.tokenType() == QXmlStreamReader::StartElement &&
             xml.name() == QLatin1String("attribute")) {
             quint16 attributeId =
-                xml.attributes().value(QLatin1String("id")).toString().toUShort(nullptr, 0);
+                xml.attributes().value(QLatin1String("id")).toUShort(nullptr, 0);
 
             if (xml.readNextStartElement()) {
                 const QVariant value = readAttributeValue(xml);
@@ -383,7 +350,7 @@ void QBluetoothServiceDiscoveryAgentPrivate::performMinimalServiceDiscovery(cons
     qCDebug(QT_BT_BLUEZ) << "Minimal uuid list for" << deviceAddress.toString() << uuidStrings;
 
     QBluetoothUuid uuid;
-    for (int i = 0; i < uuidStrings.count(); i++) {
+    for (qsizetype i = 0; i < uuidStrings.size(); ++i) {
         uuid = QBluetoothUuid(uuidStrings.at(i));
         if (uuid.isNull())
             continue;
@@ -435,50 +402,46 @@ void QBluetoothServiceDiscoveryAgentPrivate::performMinimalServiceDiscovery(cons
 
 QVariant QBluetoothServiceDiscoveryAgentPrivate::readAttributeValue(QXmlStreamReader &xml)
 {
+    auto skippingCurrentElementByDefault = qScopeGuard([&] { xml.skipCurrentElement(); });
+
     if (xml.name() == QLatin1String("boolean")) {
-        const QString value = xml.attributes().value(QStringLiteral("value")).toString();
-        xml.skipCurrentElement();
-        return value == QLatin1String("true");
+        return xml.attributes().value(QLatin1String("value")) == QLatin1String("true");
     } else if (xml.name() == QLatin1String("uint8")) {
-        quint8 value = xml.attributes().value(QStringLiteral("value")).toString().toUShort(nullptr, 0);
-        xml.skipCurrentElement();
+        quint8 value = xml.attributes().value(QLatin1String("value")).toUShort(nullptr, 0);
         return value;
     } else if (xml.name() == QLatin1String("uint16")) {
-        quint16 value = xml.attributes().value(QStringLiteral("value")).toString().toUShort(nullptr, 0);
-        xml.skipCurrentElement();
+        quint16 value = xml.attributes().value(QLatin1String("value")).toUShort(nullptr, 0);
         return value;
     } else if (xml.name() == QLatin1String("uint32")) {
-        quint32 value = xml.attributes().value(QStringLiteral("value")).toString().toUInt(nullptr, 0);
-        xml.skipCurrentElement();
+        quint32 value = xml.attributes().value(QLatin1String("value")).toUInt(nullptr, 0);
         return value;
     } else if (xml.name() == QLatin1String("uint64")) {
-        quint64 value = xml.attributes().value(QStringLiteral("value")).toString().toULongLong(nullptr, 0);
-        xml.skipCurrentElement();
+        quint64 value = xml.attributes().value(QLatin1String("value")).toULongLong(nullptr, 0);
         return value;
     } else if (xml.name() == QLatin1String("uuid")) {
         QBluetoothUuid uuid;
-        const QString value = xml.attributes().value(QStringLiteral("value")).toString();
-        if (value.startsWith(QStringLiteral("0x"))) {
-            if (value.length() == 6) {
+        const QStringView value = xml.attributes().value(QLatin1String("value"));
+        if (value.startsWith(QLatin1String("0x"))) {
+            if (value.size() == 6) {
                 quint16 v = value.toUShort(nullptr, 0);
                 uuid = QBluetoothUuid(v);
-            } else if (value.length() == 10) {
+            } else if (value.size() == 10) {
                 quint32 v = value.toUInt(nullptr, 0);
                 uuid = QBluetoothUuid(v);
             }
         } else {
-            uuid = QBluetoothUuid(value);
+            uuid = QBluetoothUuid(value.toString());
         }
-        xml.skipCurrentElement();
         return QVariant::fromValue(uuid);
     } else if (xml.name() == QLatin1String("text") || xml.name() == QLatin1String("url")) {
-        QString value = xml.attributes().value(QStringLiteral("value")).toString();
-        if (xml.attributes().value(QStringLiteral("encoding")) == QLatin1String("hex"))
-            value = QString::fromUtf8(QByteArray::fromHex(value.toLatin1()));
-        xml.skipCurrentElement();
-        return value;
+        const QStringView value = xml.attributes().value(QLatin1String("value"));
+        if (xml.attributes().value(QLatin1String("encoding")) == QLatin1String("hex"))
+            return QString::fromUtf8(QByteArray::fromHex(value.toLatin1()));
+        return value.toString();
     } else if (xml.name() == QLatin1String("sequence")) {
         QBluetoothServiceInfo::Sequence sequence;
+
+        skippingCurrentElementByDefault.dismiss(); // we skip several elements here
 
         while (xml.readNextStartElement()) {
             QVariant value = readAttributeValue(xml);
@@ -488,9 +451,8 @@ QVariant QBluetoothServiceDiscoveryAgentPrivate::readAttributeValue(QXmlStreamRe
         return QVariant::fromValue<QBluetoothServiceInfo::Sequence>(sequence);
     } else {
         qCWarning(QT_BT_BLUEZ) << "unknown attribute type"
-                               << xml.name().toString()
-                               << xml.attributes().value(QStringLiteral("value")).toString();
-        xml.skipCurrentElement();
+                               << xml.name()
+                               << xml.attributes().value(QLatin1String("value"));
         return QVariant();
     }
 }

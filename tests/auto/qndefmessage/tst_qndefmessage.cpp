@@ -1,30 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtNfc module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 #include <QtTest/QtTest>
 
@@ -185,12 +160,12 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xcd));                            // MB=1, ME=1, IL=1, TNF=5
-        data.append(char(type.length()));                   // TYPE LENGTH
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
-        data.append(char(id.length()));                     // ID LENGTH
+        data.append(char(type.size()));                   // TYPE LENGTH
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char(id.size()));                     // ID LENGTH
         data.append(type);
         data.append(id);
         data.append(payload);
@@ -213,14 +188,14 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xbd));            // MB=1, CF=1, SR=1, IL=1, TNF=5
-        data.append(char(type.length()));   // TYPE LENGTH
+        data.append(char(type.size()));   // TYPE LENGTH
         data.append(char(1));               // PAYLOAD LENGTH
-        data.append(char(id.length()));     // ID LENGTH
+        data.append(char(id.size()));     // ID LENGTH
         data.append(type);                  // TYPE
         data.append(id);                    // ID
         data.append(payload.at(0));         // PAYLOAD[0]
 
-        for (int i = 1; i < payload.length() - 1; ++i) {
+        for (int i = 1; i < payload.size() - 1; ++i) {
             data.append(char(0x36));            // CF=1, SR=1, TNF=6
             data.append(char(0));               // TYPE LENGTH
             data.append(char(1));               // PAYLOAD LENGTH
@@ -230,7 +205,7 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
         data.append(char(0x56));                        // ME=1, SR=1, TNF=6
         data.append(char(0));                           // TYPE LENGTH
         data.append(char(1));                           // PAYLOAD LENGTH
-        data.append(payload.at(payload.length() - 1));  // PAYLOAD[length - 1]
+        data.append(payload.at(payload.size() - 1));  // PAYLOAD[length - 1]
 
         QNdefRecord record;
         record.setTypeNameFormat(QNdefRecord::Unknown);
@@ -256,11 +231,11 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xc1));            // MB=1, ME=1, IL=0, TNF=1
-        data.append(char(type.length()));   // TYPE LENGTH
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char(type.size()));   // TYPE LENGTH
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
         data.append(type);
         data.append(payload);
 
@@ -290,11 +265,11 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xc1));            // MB=1, ME=1, IL=0, TNF=1
-        data.append(char(type.length()));   // TYPE LENGTH
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char(type.size()));   // TYPE LENGTH
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
         data.append(type);
         data.append(payload);
 
@@ -325,11 +300,11 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xc1));
-        data.append(char(type.length()));
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char(type.size()));
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
         data.append(type);
         data.append(payload);
 
@@ -358,11 +333,11 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xc1));
-        data.append(char(type.length()));
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char(type.size()));
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
         data.append(type);
         data.append(payload);
 
@@ -391,11 +366,11 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xc1));
-        data.append(char(type.length()));
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char(type.size()));
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
         data.append(type);
         data.append(payload);
 
@@ -428,19 +403,19 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QByteArray data;
         data.append(char(0xB9)); // MB=1, ME=0, CF=1, SR=1, IL=1, TNF=1 (NFC-RTD)
-        data.append(type.length());
-        data.append(payload1.length() & 0xff); // length fits into 1 byte
-        data.append(id.length());
+        data.append(type.size());
+        data.append(payload1.size() & 0xff); // length fits into 1 byte
+        data.append(id.size());
         data.append(type);
         data.append(id);
         data.append(payload1);
         data.append(char(0x36)); // MB=0, ME=0, CF=1, SR=1, IL=0, TNF=6 (Unchanged)
         data.append(char(0x00));
-        data.append(payload2.length());
+        data.append(payload2.size());
         data.append(payload2);
         data.append(char(0x56)); // MB=0, ME=1, CF=0, SR=1, IL=0, TNF=6 (Unchanged)
         data.append(char(0x00));
-        data.append(payload3.length());
+        data.append(payload3.size());
         data.append(payload3);
 
         QNdefRecord record;
@@ -467,22 +442,22 @@ void tst_QNdefMessage::parseSingleRecordMessage_data()
 
         QTest::newRow("truncated 1") << data << QNdefMessage() << QVariantList();
 
-        data.append(char(type.length()));   // TYPE LENGTH
+        data.append(char(type.size()));   // TYPE LENGTH
         QTest::newRow("truncated 2") << data << QNdefMessage() << QVariantList();
 
-        data.append(char((payload.length() >> 24) & 0xff)); // PAYLOAD LENGTH 3
+        data.append(char((payload.size() >> 24) & 0xff)); // PAYLOAD LENGTH 3
         QTest::newRow("truncated 3") << data << QNdefMessage() << QVariantList();
 
-        data.append(char((payload.length() >> 16) & 0xff)); // PAYLOAD LENGTH 2
+        data.append(char((payload.size() >> 16) & 0xff)); // PAYLOAD LENGTH 2
         QTest::newRow("truncated 4") << data << QNdefMessage() << QVariantList();
 
-        data.append(char((payload.length() >> 8) & 0xff));  // PAYLOAD LENGTH 1
+        data.append(char((payload.size() >> 8) & 0xff));  // PAYLOAD LENGTH 1
         QTest::newRow("truncated 5") << data << QNdefMessage() << QVariantList();
 
-        data.append(char((payload.length() >> 0) & 0xff));  // PAYLOAD LENGTH 0
+        data.append(char((payload.size() >> 0) & 0xff));  // PAYLOAD LENGTH 0
         QTest::newRow("truncated 6") << data << QNdefMessage() << QVariantList();
 
-        data.append(char(id.length())); // ID LENGTH
+        data.append(char(id.size())); // ID LENGTH
         QTest::newRow("truncated 7") << data << QNdefMessage() << QVariantList();
 
         data.append(type);
@@ -516,7 +491,7 @@ void tst_QNdefMessage::parseSingleRecordMessage()
     QVERIFY(message == reparsedMessage);
     QVERIFY(reparsedMessage == message);
 
-    for (int i = 0; i < message.count(); ++i) {
+    for (qsizetype i = 0; i < message.size(); ++i) {
         const QNdefRecord &record = message.at(i);
         const QNdefRecord &parsedRecord = parsedMessage.at(i);
 
@@ -533,7 +508,7 @@ void tst_QNdefMessage::parseSingleRecordMessage()
             QCOMPARE(textRecord.text(), parsedTextRecord.text());
             QCOMPARE(textRecord.locale(), parsedTextRecord.locale());
 
-            if (expectedData.count() == 2) {
+            if (expectedData.size() == 2) {
                 QCOMPARE(parsedTextRecord.text(), expectedData.at(0).toString());
                 QCOMPARE(parsedTextRecord.locale(), expectedData.at(1).toString());
             }
@@ -543,7 +518,7 @@ void tst_QNdefMessage::parseSingleRecordMessage()
 
             QCOMPARE(uriRecord.uri(), parsedUriRecord.uri());
 
-            if (expectedData.count() == 1)
+            if (expectedData.size() == 1)
                 QCOMPARE(parsedUriRecord.uri(), expectedData.at(0).toUrl());
         } else if (record.isRecordType<QNdefRecord>()) {
             QVERIFY(record.isEmpty());

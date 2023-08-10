@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2018 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2018 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothsocket.h"
 #include "qbluetoothsocket_bluez_p.h"
@@ -72,6 +36,10 @@ QBluetoothSocketPrivateBluez::~QBluetoothSocketPrivateBluez()
     readNotifier = nullptr;
     delete connectWriteNotifier;
     connectWriteNotifier = nullptr;
+
+    // If the socket wasn't closed/aborted make sure we free the socket file descriptor
+    if (socket != -1)
+        QT_CLOSE(socket);
 }
 
 bool QBluetoothSocketPrivateBluez::ensureNativeSocket(QBluetoothServiceInfo::Protocol type)
@@ -334,12 +302,11 @@ void QBluetoothSocketPrivateBluez::_q_writeNotify()
 
         char buf[1024];
 
-        int size = txBuffer.read(buf, 1024);
-        int writtenBytes = qt_safe_write(socket, buf, size);
+        const auto size = txBuffer.read(buf, 1024);
+        const auto writtenBytes = qt_safe_write(socket, buf, size);
         if (writtenBytes < 0) {
             switch (errno) {
             case EAGAIN:
-                writtenBytes = 0;
                 txBuffer.ungetBlock(buf, size);
                 break;
             default:
@@ -373,7 +340,7 @@ void QBluetoothSocketPrivateBluez::_q_readNotify()
     Q_Q(QBluetoothSocket);
     char *writePointer = rxBuffer.reserve(QPRIVATELINEARBUFFER_BUFFERSIZE);
 //    qint64 readFromDevice = q->readData(writePointer, QPRIVATELINEARBUFFER_BUFFERSIZE);
-    int readFromDevice = ::read(socket, writePointer, QPRIVATELINEARBUFFER_BUFFERSIZE);
+    const auto readFromDevice = ::read(socket, writePointer, QPRIVATELINEARBUFFER_BUFFERSIZE);
     rxBuffer.chop(QPRIVATELINEARBUFFER_BUFFERSIZE - (readFromDevice < 0 ? 0 : readFromDevice));
     if(readFromDevice <= 0){
         int errsv = errno;
@@ -567,7 +534,7 @@ qint64 QBluetoothSocketPrivateBluez::writeData(const char *data, qint64 maxSize)
     }
 
     if (q->openMode() & QIODevice::Unbuffered) {
-        int sz = ::qt_safe_write(socket, data, maxSize);
+        auto sz = ::qt_safe_write(socket, data, maxSize);
         if (sz < 0) {
             switch (errno) {
             case EAGAIN:
@@ -611,16 +578,16 @@ qint64 QBluetoothSocketPrivateBluez::readData(char *data, qint64 maxSize)
         return -1;
     }
 
-    if (!rxBuffer.isEmpty()) {
-        int i = rxBuffer.read(data, maxSize);
-        return i;
-    }
+    if (!rxBuffer.isEmpty())
+        return rxBuffer.read(data, maxSize);
 
     return 0;
 }
 
 void QBluetoothSocketPrivateBluez::close()
 {
+    // If we have pending data on the write buffer, wait until it has been written,
+    // after which this close() will be called again
     if (txBuffer.size() > 0)
         connectWriteNotifier->setEnabled(true);
     else
@@ -674,3 +641,5 @@ bool QBluetoothSocketPrivateBluez::canReadLine() const
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qbluetoothsocket_bluez_p.cpp"

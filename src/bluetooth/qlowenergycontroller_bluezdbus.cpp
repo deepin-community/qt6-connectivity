@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2017 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2017 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qlowenergycontroller_bluezdbus_p.h"
 #include "bluez/adapter1_bluez5_p.h"
@@ -156,7 +120,7 @@ void QLowEnergyControllerPrivateBluezDBus::devicePropertiesChanged(
 
                 // Client Characteristic Notification enabled?
                 bool cccActive = false;
-                for (const QLowEnergyServicePrivate::DescData &descData : qAsConst(charData.descriptorList)) {
+                for (const QLowEnergyServicePrivate::DescData &descData : std::as_const(charData.descriptorList)) {
                     if (descData.uuid != QBluetoothUuid(QBluetoothUuid::DescriptorType::ClientCharacteristicConfiguration))
                         continue;
                     if (descData.value == QByteArray::fromHex("0100")
@@ -270,10 +234,8 @@ void QLowEnergyControllerPrivateBluezDBus::connectToDeviceHelper()
         return;
     }
 
-    QScopedPointer<OrgFreedesktopDBusObjectManagerInterface> manager(
-                            new OrgFreedesktopDBusObjectManagerInterface(
-                                QStringLiteral("org.bluez"), QStringLiteral("/"),
-                                QDBusConnection::systemBus()));
+    auto manager = std::make_unique<OrgFreedesktopDBusObjectManagerInterface>(
+            QStringLiteral("org.bluez"), QStringLiteral("/"), QDBusConnection::systemBus());
 
     QDBusPendingReply<ManagedObjectList> reply = manager->GetManagedObjects();
     reply.waitForFinished();
@@ -315,7 +277,7 @@ void QLowEnergyControllerPrivateBluezDBus::connectToDeviceHelper()
         return;
     }
 
-    managerBluez = manager.take();
+    managerBluez = manager.release();
     connect(managerBluez, &OrgFreedesktopDBusObjectManagerInterface::InterfacesRemoved,
             this, &QLowEnergyControllerPrivateBluezDBus::interfacesRemoved);
     adapter = new OrgBluezAdapter1Interface(
@@ -415,7 +377,8 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServices()
     Q_Q(QLowEnergyController);
 
     auto setupServicePrivate = [&, q](
-            QLowEnergyService::ServiceType type, const QBluetoothUuid &uuid, const QString &path){
+            QLowEnergyService::ServiceType type, const QBluetoothUuid &uuid,
+            const QString &path, const bool battery1Interface = false){
         QSharedPointer<QLowEnergyServicePrivate> priv = QSharedPointer<QLowEnergyServicePrivate>::create();
         priv->uuid = uuid;
         priv->type = type; // we make a guess we cannot validate
@@ -423,8 +386,11 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServices()
 
         GattService serviceContainer;
         serviceContainer.servicePath = path;
-        if (uuid == QBluetoothUuid::ServiceClassUuid::BatteryService)
+
+        if (battery1Interface) {
+            qCDebug(QT_BT_BLUEZ) << "Using Battery1 interface to emulate generic interface";
             serviceContainer.hasBatteryService = true;
+        }
 
         serviceList.insert(priv->uuid, priv);
         dbusServices.insert(priv->uuid, serviceContainer);
@@ -434,25 +400,50 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServices()
 
     const ManagedObjectList managedObjectList = reply.value();
     const QString servicePathPrefix = device->path().append(QStringLiteral("/service"));
+
+    // The Bluez battery service (0x180f) support has evolved over time and needs additional logic:
+    //
+    // * Until 5.47 Bluez exposes battery services via generic interface (GattService1) only
+    // * Between 5.48..5.54 Bluez exposes battery service as a dedicated 'Battery1' interface only
+    // * From 5.55 Bluez exposes both the generic service as well as the dedicated 'Battery1'
+    //
+    // To hide the difference from users the 'Battery1' interface will be used to emulate the
+    // generic interface. Importantly also the GattService1 interface, if available, is available
+    // early whereas the Battery1 interface may be available only later (generated too late for
+    // this service discovery's purposes)
+    //
+    // The precedence for battery service here is as follows:
+    // * If available via GattService1, use that and ignore possible Battery1 interface
+    // * If Battery1 interface is available or the 'org.bluez.Device1' lists battery service
+    //   amongst list of available services, mark the service such that the code will later
+    //   look up the Battery1 service details
+    bool gattBatteryService{false};
+    QString batteryServicePath;
+
     for (ManagedObjectList::const_iterator it = managedObjectList.constBegin(); it != managedObjectList.constEnd(); ++it) {
         const InterfaceList &ifaceList = it.value();
 
         if (!it.key().path().startsWith(device->path()))
             continue;
 
-        // Since Bluez 5.48 battery services (0x180f) are no longer exposed
-        // as generic services under servicePathPrefix.
-        // A dedicated org.bluez.Battery1 interface is exposed. Here we are going to revert
-        // Bettery1 to the generic pattern.
         if (it.key().path() == device->path())  {
-            // find Battery1 service
+            // See if the battery service is available or is assumed to be available later
             for (InterfaceList::const_iterator battIter = ifaceList.constBegin(); battIter != ifaceList.constEnd(); ++battIter) {
                 const QString &iface = battIter.key();
                 if (iface == QStringLiteral("org.bluez.Battery1")) {
-                    qCDebug(QT_BT_BLUEZ) << "Found dedicated Battery service -> emulating generic btle access";
-                    setupServicePrivate(QLowEnergyService::PrimaryService,
-                                        QBluetoothUuid::ServiceClassUuid::BatteryService,
-                                        it.key().path());
+                    qCDebug(QT_BT_BLUEZ) << "Dedicated Battery1 service available";
+                    batteryServicePath = it.key().path();
+                    break;
+                } else if (iface == QStringLiteral("org.bluez.Device1")) {
+                    for (auto const& uuid :
+                         battIter.value()[QStringLiteral("UUIDs")].toStringList()) {
+                        if (QBluetoothUuid(uuid) ==
+                                QBluetoothUuid::ServiceClassUuid::BatteryService) {
+                            qCDebug(QT_BT_BLUEZ) << "Battery service listed as available service";
+                            batteryServicePath = it.key().path();
+                            break;
+                        }
+                    }
                 }
             }
             continue;
@@ -468,12 +459,23 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServices()
                 QScopedPointer<OrgBluezGattService1Interface> service(new OrgBluezGattService1Interface(
                                     QStringLiteral("org.bluez"),it.key().path(),
                                     QDBusConnection::systemBus(), this));
+                if (QBluetoothUuid(service->uUID()) ==
+                        QBluetoothUuid::ServiceClassUuid::BatteryService) {
+                    qCDebug(QT_BT_BLUEZ) << "Using battery service via GattService1 interface";
+                    gattBatteryService = true;
+                }
                 setupServicePrivate(service->primary()
                                     ? QLowEnergyService::PrimaryService
                                     : QLowEnergyService::IncludedService,
                                     QBluetoothUuid(service->uUID()), it.key().path());
             }
         }
+    }
+
+    if (!gattBatteryService && !batteryServicePath.isEmpty()) {
+        setupServicePrivate(QLowEnergyService::PrimaryService,
+                            QBluetoothUuid::ServiceClassUuid::BatteryService,
+                            batteryServicePath, true);
     }
 
     setState(QLowEnergyController::DiscoveredState);
@@ -660,7 +662,7 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServiceDetails(
         }
 
         // descriptor data
-        for (const auto &descEntry : qAsConst(dbusChar.descriptors)) {
+        for (const auto &descEntry : std::as_const(dbusChar.descriptors)) {
             const QLowEnergyHandle descriptorHandle = runningHandle++;
             QLowEnergyServicePrivate::DescData descData;
             descData.uuid = QBluetoothUuid(descEntry->uUID());
@@ -804,7 +806,6 @@ void QLowEnergyControllerPrivateBluezDBus::onDescReadFinished(QDBusPendingCallWa
     }
 
     bool isServiceDiscovery = nextJob.flags.testFlag(GattJob::ServiceDiscovery);
-    const QBluetoothUuid descUuid = charData.descriptorList[nextJob.handle].uuid;
 
     QDBusPendingReply<QByteArray> reply = *call;
     if (reply.isError()) {
@@ -952,7 +953,7 @@ void QLowEnergyControllerPrivateBluezDBus::scheduleNextJob()
         const QLowEnergyServicePrivate::CharData &charData =
                             service->characteristicList.value(nextJob.handle);
         bool foundChar = false;
-        for (const auto &gattChar : qAsConst(dbusServiceData.characteristics)) {
+        for (const auto &gattChar : std::as_const(dbusServiceData.characteristics)) {
             if (charData.uuid != QBluetoothUuid(gattChar.characteristic->uUID()))
                 continue;
 
@@ -981,7 +982,7 @@ void QLowEnergyControllerPrivateBluezDBus::scheduleNextJob()
         const QLowEnergyServicePrivate::CharData &charData =
                             service->characteristicList.value(nextJob.handle);
         bool foundChar = false;
-        for (const auto &gattChar : qAsConst(dbusServiceData.characteristics)) {
+        for (const auto &gattChar : std::as_const(dbusServiceData.characteristics)) {
             if (charData.uuid != QBluetoothUuid(gattChar.characteristic->uUID()))
                 continue;
 
@@ -1023,11 +1024,11 @@ void QLowEnergyControllerPrivateBluezDBus::scheduleNextJob()
 
         const QBluetoothUuid descUuid = charData.descriptorList[nextJob.handle].uuid;
         bool foundDesc = false;
-        for (const auto &gattChar : qAsConst(dbusServiceData.characteristics)) {
+        for (const auto &gattChar : std::as_const(dbusServiceData.characteristics)) {
             if (charData.uuid != QBluetoothUuid(gattChar.characteristic->uUID()))
                 continue;
 
-            for (const auto &gattDesc : qAsConst(gattChar.descriptors)) {
+            for (const auto &gattDesc : std::as_const(gattChar.descriptors)) {
                 if (descUuid != QBluetoothUuid(gattDesc->uUID()))
                     continue;
 
@@ -1067,11 +1068,11 @@ void QLowEnergyControllerPrivateBluezDBus::scheduleNextJob()
 
         const QBluetoothUuid descUuid = charData.descriptorList[nextJob.handle].uuid;
         bool foundDesc = false;
-        for (const auto &gattChar : qAsConst(dbusServiceData.characteristics)) {
+        for (const auto &gattChar : std::as_const(dbusServiceData.characteristics)) {
             if (charData.uuid != QBluetoothUuid(gattChar.characteristic->uUID()))
                 continue;
 
-            for (const auto &gattDesc : qAsConst(gattChar.descriptors)) {
+            for (const auto &gattDesc : std::as_const(gattChar.descriptors)) {
                 if (descUuid != QBluetoothUuid(gattDesc->uUID()))
                     continue;
 
@@ -1315,3 +1316,5 @@ QLowEnergyService *QLowEnergyControllerPrivateBluezDBus::addServiceHelper(
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qlowenergycontroller_bluezdbus_p.cpp"

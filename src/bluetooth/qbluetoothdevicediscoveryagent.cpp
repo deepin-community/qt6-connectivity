@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 #include "qbluetoothhostinfo.h"
 
 #include "qbluetoothdevicediscoveryagent.h"
@@ -91,15 +55,19 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT)
     \value InputOutputError    Writing or reading from the device resulted in an error.
     \value InvalidBluetoothAdapterError The passed local adapter address does not match the physical
                                         adapter address of any local Bluetooth device.
-    \value UnsupportedPlatformError Device discovery is not possible or implemented on the current
-                                    platform. The error is set in response to a call to \l start().
-                                    An example for such cases are iOS versions below 5.0 which do not support
-                                    Bluetooth device search at all. This value was introduced by Qt 5.5.
-    \value UnsupportedDiscoveryMethod   One of the requested discovery methods is not supported by
-                                        the current platform. This value was introduced by Qt 5.8.
-    \value LocationServiceTurnedOffError    The location service is turned off. Usage of
-                                            Bluetooth APIs is not possible when location service
-                                            is turned off. This value was introduced by Qt 6.2.
+    \value [since 5.5] UnsupportedPlatformError Device discovery is not possible or implemented
+                                                on the current platform. The error is set in
+                                                response to a call to \l start(). An example for
+                                                such cases are iOS versions below 5.0 which do
+                                                not support Bluetooth device search at all.
+    \value [since 5.8] UnsupportedDiscoveryMethod   One of the requested discovery methods is not
+                                                    supported by the current platform.
+    \value [since 6.2] LocationServiceTurnedOffError    The location service is turned off.
+                                                        Usage of Bluetooth APIs is not possible
+                                                        when location service is turned off.
+    \value [since 6.4] MissingPermissionsError  The operating system requests
+                                                permissions which were not
+                                                granted by the user.
     \value UnknownError     An unknown error has occurred.
 */
 
@@ -259,6 +227,8 @@ QList<QBluetoothDeviceInfo> QBluetoothDeviceDiscoveryAgent::discoveredDevices() 
     the platform the classic search may add more time to the total discovery process
     beyond \a timeout.
 
+    For a reliable Bluetooth Low Energy discovery, use at least 40000 milliseconds.
+
     \sa lowEnergyDiscoveryTimeout()
     \since 5.8
  */
@@ -317,7 +287,7 @@ int QBluetoothDeviceDiscoveryAgent::lowEnergyDiscoveryTimeout() const
 void QBluetoothDeviceDiscoveryAgent::start()
 {
     Q_D(QBluetoothDeviceDiscoveryAgent);
-    if (!isActive() && d->lastError != InvalidBluetoothAdapterError)
+    if (!isActive())
         d->start(supportedDiscoveryMethods());
 }
 
@@ -354,7 +324,7 @@ void QBluetoothDeviceDiscoveryAgent::start(DiscoveryMethods methods)
         return;
     }
 
-    if (!isActive() && d->lastError != InvalidBluetoothAdapterError)
+    if (!isActive())
         d->start(methods);
 }
 
@@ -379,6 +349,8 @@ bool QBluetoothDeviceDiscoveryAgent::isActive() const
 
 /*!
     Returns the last error.
+
+    Any possible previous errors are cleared upon restarting the discovery.
 */
 QBluetoothDeviceDiscoveryAgent::Error QBluetoothDeviceDiscoveryAgent::error() const
 {
@@ -389,6 +361,8 @@ QBluetoothDeviceDiscoveryAgent::Error QBluetoothDeviceDiscoveryAgent::error() co
 
 /*!
     Returns a human-readable description of the last error.
+
+    \sa error(), errorOccurred()
 */
 QString QBluetoothDeviceDiscoveryAgent::errorString() const
 {

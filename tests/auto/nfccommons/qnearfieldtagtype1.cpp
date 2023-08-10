@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtNfc module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qnearfieldtagtype1_p.h"
 #include "qtlv_p.h"
@@ -280,11 +244,11 @@ void QNearFieldTagType1Private::progressToNextNdefWriteMessageState()
         m_tlvWriter = new QTlvWriter(q);
 
         // write old TLVs
-        for (const Tlv &tlv : qAsConst(m_tlvs))
+        for (const Tlv &tlv : std::as_const(m_tlvs))
             m_tlvWriter->writeTlv(tlv.first, tlv.second);
 
         // write new NDEF message TLVs
-        for (const QNdefMessage &message : qAsConst(m_ndefWriteMessages))
+        for (const QNdefMessage &message : std::as_const(m_ndefWriteMessages))
             m_tlvWriter->writeTlv(0x03, message.toByteArray());
 
         // write terminator TLV
@@ -371,7 +335,7 @@ static QVariant decodeResponse(const QByteArray &command, const QByteArray &resp
         if (writeBlockAddress != blockAddress)
             return false;
 
-        for (int i = 0; i < writeData.length(); ++i) {
+        for (int i = 0; i < writeData.size(); ++i) {
             if ((writeData.at(i) & data.at(i)) != data.at(i))
                 return false;
         }
@@ -678,7 +642,7 @@ QNearFieldTarget::RequestId QNearFieldTagType1::writeBlock(quint8 blockAddress,
                                                            const QByteArray &data,
                                                            WriteMode mode)
 {
-    if (data.length() != 8)
+    if (data.size() != 8)
         return QNearFieldTarget::RequestId();
 
     QByteArray command;

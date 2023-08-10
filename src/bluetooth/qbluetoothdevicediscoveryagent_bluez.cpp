@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtBluetooth module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include <QtCore/QLoggingCategory>
 #include "qbluetoothdevicediscoveryagent.h"
@@ -56,7 +20,7 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
 QBluetoothDeviceDiscoveryAgentPrivate::QBluetoothDeviceDiscoveryAgentPrivate(
     const QBluetoothAddress &deviceAdapter, QBluetoothDeviceDiscoveryAgent *parent) :
-    m_adapterAddress(deviceAdapter),
+    adapterAddress(deviceAdapter),
     q_ptr(parent)
 {
     initializeBluez5();
@@ -109,13 +73,15 @@ void QBluetoothDeviceDiscoveryAgentPrivate::start(QBluetoothDeviceDiscoveryAgent
         return;
     }
 
+    lastError = QBluetoothDeviceDiscoveryAgent::NoError;
+    errorString.clear();
     discoveredDevices.clear();
     devicesProperties.clear();
 
     Q_Q(QBluetoothDeviceDiscoveryAgent);
 
     bool ok = false;
-    const QString adapterPath = findAdapterForAddress(m_adapterAddress, &ok);
+    const QString adapterPath = findAdapterForAddress(adapterAddress, &ok);
     if (!ok || adapterPath.isEmpty()) {
         qCWarning(QT_BT_BLUEZ) << "Cannot find Bluez 5 adapter for device search" << ok;
         lastError = QBluetoothDeviceDiscoveryAgent::InputOutputError;
@@ -276,10 +242,17 @@ static QBluetoothDeviceInfo createDeviceInfoFromBluez5Device(const QVariantMap& 
     }
 
     const ManufacturerDataList deviceManufacturerData = qdbus_cast<ManufacturerDataList>(properties[QStringLiteral("ManufacturerData")]);
-    const QList<quint16> keys = deviceManufacturerData.keys();
-    for (quint16 key : keys)
+    const QList<quint16> keysManufacturer = deviceManufacturerData.keys();
+    for (quint16 key : keysManufacturer)
         deviceInfo.setManufacturerData(
                     key, deviceManufacturerData.value(key).variant().toByteArray());
+
+    const ServiceDataList deviceServiceData =
+            qdbus_cast<ServiceDataList>(properties[QStringLiteral("ServiceData")]);
+    const QList<QString> keysService = deviceServiceData.keys();
+    for (QString key : keysService)
+        deviceInfo.setServiceData(QBluetoothUuid(key),
+                                  deviceServiceData.value(key).variant().toByteArray());
 
     return deviceInfo;
 }
@@ -302,15 +275,16 @@ void QBluetoothDeviceDiscoveryAgentPrivate::deviceFound(const QString &devicePat
         return;
 
     qCDebug(QT_BT_BLUEZ) << "Discovered: " << deviceInfo.name() << deviceInfo.address()
-                         << "Num UUIDs" << deviceInfo.serviceUuids().count()
-                         << "total device" << discoveredDevices.count() << "cached"
+                         << "Num UUIDs" << deviceInfo.serviceUuids().size()
+                         << "total device" << discoveredDevices.size() << "cached"
                          << "RSSI" << deviceInfo.rssi()
-                         << "Num ManufacturerData" << deviceInfo.manufacturerData().size();
+                         << "Num ManufacturerData" << deviceInfo.manufacturerData().size()
+                         << "Num ServiceData" << deviceInfo.serviceData().size();
 
     // Cache the properties so we do not have to access dbus every time to get a value
     devicesProperties[devicePath] = properties;
 
-    for (int i = 0; i < discoveredDevices.size(); i++) {
+    for (qsizetype i = 0; i < discoveredDevices.size(); ++i) {
         if (discoveredDevices[i].address() == deviceInfo.address()) {
             if (lowEnergySearchTimeout > 0 && discoveredDevices[i] == deviceInfo) {
                 qCDebug(QT_BT_BLUEZ) << "Duplicate: " << deviceInfo.address();
@@ -428,7 +402,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::_q_PropertiesChanged(const QString &
     if (changed_properties.contains(QStringLiteral("RSSI"))
         || changed_properties.contains(QStringLiteral("ManufacturerData"))) {
 
-        for (int i = 0; i < discoveredDevices.size(); i++) {
+        for (qsizetype i = 0; i < discoveredDevices.size(); ++i) {
             if (discoveredDevices[i].address() == info.address()) {
                 QBluetoothDeviceInfo::Fields updatedFields = QBluetoothDeviceInfo::Field::None;
                 if (changed_properties.contains(QStringLiteral("RSSI"))) {

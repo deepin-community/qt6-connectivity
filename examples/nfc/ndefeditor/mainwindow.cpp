@@ -1,52 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2021 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtNfc module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:BSD$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** BSD License Usage
-** Alternatively, you may use this file under the terms of the BSD license
-** as follows:
-**
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
-**
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2021 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
@@ -134,12 +87,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    QMenu *addRecordMenu = new QMenu(this);
-    addRecordMenu->addAction(tr("NFC Text Record"), this, SLOT(addNfcTextRecord()));
-    addRecordMenu->addAction(tr("NFC URI Record"), this, SLOT(addNfcUriRecord()));
-    addRecordMenu->addAction(tr("MIME Image Record"), this, SLOT(addMimeImageRecord()));
-    addRecordMenu->addAction(tr("Empty Record"), this, SLOT(addEmptyRecord()));
-    ui->addRecord->setMenu(addRecordMenu);
+    connect(ui->addRecord, &QPushButton::clicked, this, &MainWindow::showMenu);
 
     QVBoxLayout *vbox = new QVBoxLayout;
     ui->scrollAreaWidgetContents->setLayout(vbox);
@@ -366,6 +314,28 @@ void MainWindow::targetError(QNearFieldTarget::Error error, const QNearFieldTarg
         m_manager->stopTargetDetection();
         m_request = QNearFieldTarget::RequestId();
     }
+}
+
+void MainWindow::showMenu()
+{
+    // We have to manually call QMenu::popup() because of QTBUG-98651.
+    // And we need to re-create menu each time because of QTBUG-97482.
+    if (m_menu) {
+        m_menu->setParent(nullptr);
+        delete m_menu;
+    }
+    m_menu = new QMenu(this);
+    m_menu->addAction(tr("NFC Text Record"), this, &MainWindow::addNfcTextRecord);
+    m_menu->addAction(tr("NFC URI Record"), this, &MainWindow::addNfcUriRecord);
+    m_menu->addAction(tr("MIME Image Record"), this, &MainWindow::addMimeImageRecord);
+    m_menu->addAction(tr("Empty Record"), this, &MainWindow::addEmptyRecord);
+
+    // Use menu's sizeHint() to position it so that its right side is aligned
+    // with button's right side.
+    QPushButton *button = ui->addRecord;
+    const int x = button->x() + button->width() - m_menu->sizeHint().width();
+    const int y = button->y() + button->height();
+    m_menu->popup(mapToGlobal(QPoint(x, y)));
 }
 
 void MainWindow::clearMessage()

@@ -1,41 +1,5 @@
-/****************************************************************************
- **
- ** Copyright (C) 2016 The Qt Company Ltd.
- ** Contact: https://www.qt.io/licensing/
- **
- ** This file is part of the QtBluetooth module of the Qt Toolkit.
- **
- ** $QT_BEGIN_LICENSE:LGPL$
- ** Commercial License Usage
- ** Licensees holding valid commercial Qt licenses may use this file in
- ** accordance with the commercial license agreement provided with the
- ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and The Qt Company. For licensing terms
- ** and conditions see https://www.qt.io/terms-conditions. For further
- ** information use the contact form at https://www.qt.io/contact-us.
- **
- ** GNU Lesser General Public License Usage
- ** Alternatively, this file may be used under the terms of the GNU Lesser
- ** General Public License version 3 as published by the Free Software
- ** Foundation and appearing in the file LICENSE.LGPL3 included in the
- ** packaging of this file. Please review the following information to
- ** ensure the GNU Lesser General Public License version 3 requirements
- ** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
- **
- ** GNU General Public License Usage
- ** Alternatively, this file may be used under the terms of the GNU
- ** General Public License version 2.0 or (at your option) the GNU General
- ** Public license version 3 or any later version approved by the KDE Free
- ** Qt Foundation. The licenses are as published by the Free Software
- ** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
- ** included in the packaging of this file. Please review the following
- ** information to ensure the GNU General Public License requirements will
- ** be met: https://www.gnu.org/licenses/gpl-2.0.html and
- ** https://www.gnu.org/licenses/gpl-3.0.html.
- **
- ** $QT_END_LICENSE$
- **
- ****************************************************************************/
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 package org.qtproject.qt.android.bluetooth;
 
@@ -79,7 +43,7 @@ public class QtBluetoothLEServer {
     private Context qtContext = null;
 
     // Bluetooth members
-    private final BluetoothAdapter mBluetoothAdapter;
+    private BluetoothAdapter mBluetoothAdapter = null;
     private BluetoothManager mBluetoothManager = null;
     private BluetoothGattServer mGattServer = null;
     private BluetoothLeAdvertiser mLeAdvertiser = null;
@@ -285,25 +249,25 @@ public class QtBluetoothLEServer {
     public QtBluetoothLEServer(Context context)
     {
         qtContext = context;
-        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-
-        if (mBluetoothAdapter == null || qtContext == null) {
-            Log.w(TAG, "Missing Bluetooth adapter or Qt context. Peripheral role disabled.");
+        if (qtContext == null) {
+            Log.w(TAG, "Missing context object. Peripheral role disabled.");
             return;
         }
 
-        mBluetoothManager = (BluetoothManager) qtContext.getSystemService(Context.BLUETOOTH_SERVICE);
+        mBluetoothManager =
+            (BluetoothManager) qtContext.getSystemService(Context.BLUETOOTH_SERVICE);
         if (mBluetoothManager == null) {
-            Log.w(TAG, "Bluetooth service not available.");
+            Log.w(TAG, "Bluetooth service not available. Peripheral role disabled.");
             return;
         }
 
-        mLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+        mBluetoothAdapter = mBluetoothManager.getAdapter();
+        if (mBluetoothAdapter == null) {
+            Log.w(TAG, "Missing Bluetooth adapter. Peripheral role disabled.");
+            return;
+        }
 
-        if (!mBluetoothAdapter.isMultipleAdvertisementSupported())
-            Log.w(TAG, "Device does not support Bluetooth Low Energy advertisement.");
-        else
-            Log.w(TAG, "Let's do BTLE Peripheral.");
+        Log.w(TAG, "Let's do BTLE Peripheral.");
     }
 
     // The following functions are synchronized callback handlers. The callbacks
@@ -383,7 +347,7 @@ public class QtBluetoothLEServer {
                 break;
         }
 
-        leServerConnectionStateChange(qtObject, qtErrorCode, qtControllerState);
+        leConnectionStateChange(qtObject, qtErrorCode, qtControllerState);
     }
 
     public synchronized void handleOnServiceAdded(int status, BluetoothGattService service)
@@ -771,7 +735,8 @@ public class QtBluetoothLEServer {
         mGattServer = null;
 
         mRemoteName = mRemoteAddress = "";
-        leServerConnectionStateChange(qtObject, 0 /*NoError*/, 0 /*QLowEnergyController::UnconnectedState*/);
+        leConnectionStateChange(qtObject, 0 /*NoError*/,
+                                0 /*QLowEnergyController::UnconnectedState*/);
     }
 
     // This function is called from Qt thread
@@ -779,8 +744,20 @@ public class QtBluetoothLEServer {
                                     AdvertiseData scanResponse,
                                     AdvertiseSettings settings)
     {
-        if (mLeAdvertiser == null)
+        // Check that the bluetooth is on
+        if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {
+            Log.w(TAG, "StartAdvertising: Bluetooth not available or offline");
             return false;
+        }
+
+        // According to Android doc this check should always precede the advertiser creation
+        if (mLeAdvertiser == null && mBluetoothAdapter.isMultipleAdvertisementSupported())
+            mLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+
+        if (mLeAdvertiser == null) {
+            Log.w(TAG, "StartAdvertising: LE advertisement not supported");
+            return false;
+        }
 
         if (!connectServer()) {
             Log.w(TAG, "Server::startAdvertising: Cannot open GATT server");
@@ -963,6 +940,7 @@ public class QtBluetoothLEServer {
                 case AdvertiseCallback.ADVERTISE_FAILED_ALREADY_STARTED:
                     return; // ignore -> noop
                 case AdvertiseCallback.ADVERTISE_FAILED_DATA_TOO_LARGE:
+                    Log.e(TAG, "Please reduce size of advertising data.");
                     qtErrorCode = 1;
                     break;
                 case AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED:
@@ -982,7 +960,7 @@ public class QtBluetoothLEServer {
         }
     };
 
-    public native void leServerConnectionStateChange(long qtObject, int errorCode, int newState);
+    public native void leConnectionStateChange(long qtObject, int errorCode, int newState);
     public native void leMtuChanged(long qtObject, int mtu);
     public native void leServerAdvertisementError(long qtObject, int status);
     public native void leServerCharacteristicChanged(long qtObject,
