@@ -38,15 +38,6 @@ QT_IMPL_METATYPE_EXTERN(ServiceData)
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_WINDOWS)
 
-// Endianness conversion for quint128 doesn't exist in qtendian.h
-inline quint128 qbswap(const quint128 src)
-{
-    quint128 dst;
-    for (int i = 0; i < 16; i++)
-        dst.data[i] = src.data[15 - i];
-    return dst;
-}
-
 static QByteArray byteArrayFromBuffer(const IBuffer &buffer)
 {
     const uint8_t *data = buffer.data();
@@ -89,8 +80,8 @@ static ServiceData extractServiceData(const BluetoothLEAdvertisement &ad)
                            bufferData + 4);
             } else if (dataType == 0x21) {
                 Q_ASSERT(bufferData.size() >= 16);
-                ret.insert(QBluetoothUuid(qToBigEndian<quint128>(
-                                   qFromLittleEndian<quint128>(bufferData.constData()))),
+                ret.insert(QBluetoothUuid(qToBigEndian<QUuid::Id128Bytes>(
+                                   qFromLittleEndian<QUuid::Id128Bytes>(bufferData.constData()))),
                            bufferData + 16);
             }
         }
@@ -406,6 +397,7 @@ void QWinRTBluetoothDeviceDiscoveryWorker::onAdvertisementDataReceived(
         const ServiceData &serviceData, const QList<QBluetoothUuid> &uuids)
 {
     // Merge newly found services with list of currently found ones
+    bool needDiscoverServices = false;
     {
         QMutexLocker locker(&m_leDevicesMutex);
         if (m_foundLEDevicesMap.contains(address)) {
@@ -426,14 +418,13 @@ void QWinRTBluetoothDeviceDiscoveryWorker::onAdvertisementDataReceived(
                 if (adInfo.serviceData != m_foundLEDevicesMap[address].serviceData)
                     changedFields.setFlag((QBluetoothDeviceInfo::Field::ServiceData));
             }
-            bool newServiceAdded = false;
             for (const QBluetoothUuid &uuid : std::as_const(uuids)) {
                 if (!foundServices.contains(uuid)) {
                     foundServices.append(uuid);
-                    newServiceAdded = true;
+                    needDiscoverServices = true;
                 }
             }
-            if (!newServiceAdded) {
+            if (!needDiscoverServices) {
                 if (!changedFields.testFlag(QBluetoothDeviceInfo::Field::None)) {
                     QMetaObject::invokeMethod(this, "deviceDataChanged", Qt::AutoConnection,
                                               Q_ARG(QBluetoothAddress, QBluetoothAddress(address)),
@@ -445,6 +436,7 @@ void QWinRTBluetoothDeviceDiscoveryWorker::onAdvertisementDataReceived(
             }
             m_foundLEDevicesMap[address].services = foundServices;
         } else {
+            needDiscoverServices = true;
             LEAdvertisingInfo info;
             info.services = std::move(uuids);
             info.manufacturerData = std::move(manufacturerData);
@@ -453,24 +445,26 @@ void QWinRTBluetoothDeviceDiscoveryWorker::onAdvertisementDataReceived(
             m_foundLEDevicesMap.insert(address, info);
         }
     }
-    ++m_pendingDevices; // as if we discovered a new LE device
-    auto thisPtr = shared_from_this();
-    auto asyncOp = BluetoothLEDevice::FromBluetoothAddressAsync(address);
-    asyncOp.Completed([thisPtr, address](auto &&op, AsyncStatus status) {
-        if (thisPtr) {
-            if (status == AsyncStatus::Completed) {
-                BluetoothLEDevice device = op.GetResults();
-                if (device) {
-                    thisPtr->handleLowEnergyDevice(device);
-                    return;
+    if (needDiscoverServices) {
+        ++m_pendingDevices; // as if we discovered a new LE device
+        auto thisPtr = shared_from_this();
+        auto asyncOp = BluetoothLEDevice::FromBluetoothAddressAsync(address);
+        asyncOp.Completed([thisPtr, address](auto &&op, AsyncStatus status) {
+            if (thisPtr) {
+                if (status == AsyncStatus::Completed) {
+                    BluetoothLEDevice device = op.GetResults();
+                    if (device) {
+                        thisPtr->handleLowEnergyDevice(device);
+                        return;
+                    }
                 }
+                // status != Completed or failed to extract result
+                qCDebug(QT_BT_WINDOWS) << "Failed to get LE device from address"
+                                       << QBluetoothAddress(address);
+                invokeDecrementPendingDevicesCountAndCheckFinished(thisPtr);
             }
-            // status != Completed or failed to extract result
-            qCDebug(QT_BT_WINDOWS) << "Failed to get LE device from address"
-                                   << QBluetoothAddress(address);
-            invokeDecrementPendingDevicesCountAndCheckFinished(thisPtr);
-        }
-    });
+        });
+    }
 }
 
 void QWinRTBluetoothDeviceDiscoveryWorker::stopAdvertisementWatcher()

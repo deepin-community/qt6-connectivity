@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 if (NOT QT_FEATURE_private_tests)
     return()
 endif()
@@ -20,10 +23,10 @@ qt_internal_add_test(tst_qnearfieldmanager
         ../nfccommons/qtlv.cpp ../nfccommons/qtlv_p.h
         tst_qnearfieldmanager.cpp
     DEFINES
-        SRCDIR=\\\"${CMAKE_CURRENT_SOURCE_DIR}/../nfcdata\\\"
+        SRCDIR="${CMAKE_CURRENT_SOURCE_DIR}/../nfcdata"
     INCLUDE_DIRECTORIES
         ../nfccommons
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::NfcPrivate
     TESTDATA ${test_data}
 )

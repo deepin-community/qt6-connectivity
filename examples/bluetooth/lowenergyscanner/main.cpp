@@ -2,24 +2,21 @@
 // Copyright (C) 2017 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
-#include <QtCore/QLoggingCategory>
-#include <QQmlContext>
-#include <QGuiApplication>
-#include <QQuickView>
 #include "device.h"
 
+#include <QtCore/qloggingcategory.h>
+#include <QtGui/qguiapplication.h>
+#include <QtQml/qqmlapplicationengine.h>
 
 int main(int argc, char *argv[])
 {
     // QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
     QGuiApplication app(argc, argv);
 
-    Device d;
-    QQuickView view;
-    view.rootContext()->setContextProperty("device", &d);
+    QQmlApplicationEngine engine;
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
+                     []() { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+    engine.loadFromModule("Scanner", "Main");
 
-    view.setSource(QUrl("qrc:/assets/main.qml"));
-    view.setResizeMode(QQuickView::SizeRootObjectToView);
-    view.show();
-    return QGuiApplication::exec();
+    return app.exec();
 }

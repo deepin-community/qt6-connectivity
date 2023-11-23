@@ -4,7 +4,14 @@
 
 #ifndef SERVICEINFO_H
 #define SERVICEINFO_H
-#include <QtBluetooth/QLowEnergyService>
+
+#include <QtCore/qobject.h>
+
+#include <QtQmlIntegration/qqmlintegration.h>
+
+QT_BEGIN_NAMESPACE
+class QLowEnergyService;
+QT_END_NAMESPACE
 
 class ServiceInfo: public QObject
 {
@@ -12,6 +19,9 @@ class ServiceInfo: public QObject
     Q_PROPERTY(QString serviceName READ getName NOTIFY serviceChanged)
     Q_PROPERTY(QString serviceUuid READ getUuid NOTIFY serviceChanged)
     Q_PROPERTY(QString serviceType READ getType NOTIFY serviceChanged)
+
+    QML_ANONYMOUS
+
 public:
     ServiceInfo() = default;
     ServiceInfo(QLowEnergyService *service);

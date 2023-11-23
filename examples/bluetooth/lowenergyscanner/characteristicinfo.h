@@ -4,9 +4,13 @@
 
 #ifndef CHARACTERISTICINFO_H
 #define CHARACTERISTICINFO_H
-#include <QObject>
-#include <QString>
-#include <QtBluetooth/QLowEnergyCharacteristic>
+
+#include <QtBluetooth/qlowenergycharacteristic.h>
+
+#include <QtCore/qobject.h>
+#include <QtCore/qstring.h>
+
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class CharacteristicInfo: public QObject
 {
@@ -15,6 +19,8 @@ class CharacteristicInfo: public QObject
     Q_PROPERTY(QString characteristicUuid READ getUuid NOTIFY characteristicChanged)
     Q_PROPERTY(QString characteristicValue READ getValue NOTIFY characteristicChanged)
     Q_PROPERTY(QString characteristicPermission READ getPermission NOTIFY characteristicChanged)
+
+    QML_ANONYMOUS
 
 public:
     CharacteristicInfo() = default;

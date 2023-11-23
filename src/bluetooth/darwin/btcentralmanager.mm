@@ -1,4 +1,4 @@
-// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qlowenergyserviceprivate_p.h"
@@ -71,7 +71,7 @@ QT_END_NAMESPACE
 
 QT_USE_NAMESPACE
 
-@interface QT_MANGLE_NAMESPACE(DarwinBTCentralManager) (PrivateAPI)
+@interface DarwinBTCentralManager (PrivateAPI)
 
 - (void)watchAfter:(id)object timeout:(DarwinBluetooth::OperationTimeout)type;
 - (bool)objectIsUnderWatch:(id)object operation:(DarwinBluetooth::OperationTimeout)type;
@@ -105,7 +105,7 @@ QT_USE_NAMESPACE
 
 using DiscoveryMode = QLowEnergyService::DiscoveryMode;
 
-@implementation QT_MANGLE_NAMESPACE(DarwinBTCentralManager)
+@implementation DarwinBTCentralManager
 {
 @private
     CBCentralManager *manager;
@@ -211,7 +211,7 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
 {
     using namespace DarwinBluetooth;
 
-    GCDTimer newWatcher([[GCDTimerObjC alloc] initWithDelegate:self], RetainPolicy::noInitialRetain);
+    GCDTimer newWatcher([[DarwinBTGCDTimer alloc] initWithDelegate:self], RetainPolicy::noInitialRetain);
     [newWatcher watchAfter:object withTimeoutType:type];
     timeoutWatchdogs.push_back(newWatcher);
     [newWatcher startWithTimeout:timeoutMS step:200];
@@ -244,7 +244,7 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
 
     using namespace DarwinBluetooth;
 
-    GCDTimerObjC *watcher = static_cast<GCDTimerObjC *>(sender);
+    DarwinBTGCDTimer *watcher = static_cast<DarwinBTGCDTimer *>(sender);
     id cbObject = [watcher objectUnderWatch];
     const OperationTimeout type = [watcher timeoutType];
 
@@ -341,7 +341,7 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
     }
 
 
-    const quint128 qtUuidData(deviceUuid.toUInt128());
+    const QUuid::Id128Bytes qtUuidData(deviceUuid.toBytes());
     uuid_t uuidData = {};
     std::copy(qtUuidData.data, qtUuidData.data + 16, uuidData);
     const ObjCScopedPointer<NSUUID> nsUuid([[NSUUID alloc] initWithUUIDBytes:uuidData], RetainPolicy::noInitialRetain);
@@ -440,7 +440,6 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
     //parameter to nil is considerably slower and is not recommended."
     //
     // ... but we'd like to have them all:
-    [peripheral setDelegate:self];
     managerState = CentralManagerDiscovering;
     [self watchAfter:peripheral timeout:OperationTimeout::serviceDiscovery];
     [peripheral discoverServices:nil];
@@ -849,6 +848,12 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
         [self setMtu:int(maxLen) + 3];
 
     return lastKnownMtu;
+}
+
+- (void)readRssi
+{
+    Q_ASSERT([self isConnected]);
+    [peripheral readRSSI];
 }
 
 - (void)setNotifyValue:(const QByteArray &)value
@@ -1298,6 +1303,8 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
 
     void([self mtu]);
 
+    [peripheral setDelegate:self];
+
     managerState = DarwinBluetooth::CentralManagerIdle;
     if (notifier)
         emit notifier->connected();
@@ -1367,8 +1374,10 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
     if (error) {
         NSLog(@"%s failed with error %@", Q_FUNC_INFO, error);
         // TODO: better error mapping required.
+        // Emit an error which also causes the service discovery finished() signal
         if (notifier)
             emit notifier->CBManagerError(QLowEnergyController::UnknownError);
+        return;
     }
 
     [self discoverIncludedServices];
@@ -1834,6 +1843,26 @@ using DiscoveryMode = QLowEnergyService::DiscoveryMode;
     }
 
     [self performNextRequest];
+}
+
+- (void)peripheral:(CBPeripheral *)aPeripheral didReadRSSI:(NSNumber *)RSSI error:(nullable NSError *)error
+{
+    Q_UNUSED(aPeripheral);
+
+    if (!notifier) // This controller was detached.
+        return;
+
+    if (error) {
+        NSLog(@"Reading RSSI finished with error: %@", error);
+        return emit notifier->CBManagerError(QLowEnergyController::RssiReadError);
+    }
+
+    if (!RSSI) {
+        qCWarning(QT_BT_DARWIN, "Reading RSSI returned no value");
+        return emit notifier->CBManagerError(QLowEnergyController::RssiReadError);
+    }
+
+    emit notifier->rssiUpdated(qint16([RSSI shortValue]));
 }
 
 - (void)detach

@@ -6,6 +6,13 @@
 #include "deviceinfo.h"
 #include "heartrate-global.h"
 
+#include <QtBluetooth/qbluetoothdeviceinfo.h>
+
+#if QT_CONFIG(permissions)
+#include <QtCore/qcoreapplication.h>
+#include <QtCore/qpermissions.h>
+#endif
+
 DeviceFinder::DeviceFinder(DeviceHandler *handler, QObject *parent):
     BluetoothBaseClass(parent),
     m_deviceHandler(handler)
@@ -14,12 +21,15 @@ DeviceFinder::DeviceFinder(DeviceHandler *handler, QObject *parent):
     m_deviceDiscoveryAgent = new QBluetoothDeviceDiscoveryAgent(this);
     m_deviceDiscoveryAgent->setLowEnergyDiscoveryTimeout(15000);
 
-    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::deviceDiscovered, this, &DeviceFinder::addDevice);
-    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::errorOccurred, this,
-            &DeviceFinder::scanError);
+    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::deviceDiscovered,
+            this, &DeviceFinder::addDevice);
+    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::errorOccurred,
+            this, &DeviceFinder::scanError);
 
-    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::finished, this, &DeviceFinder::scanFinished);
-    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::canceled, this, &DeviceFinder::scanFinished);
+    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::finished,
+            this, &DeviceFinder::scanFinished);
+    connect(m_deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::canceled,
+            this, &DeviceFinder::scanFinished);
     //! [devicediscovery-1]
 
 
@@ -38,6 +48,22 @@ DeviceFinder::~DeviceFinder()
 
 void DeviceFinder::startSearch()
 {
+#if QT_CONFIG(permissions)
+    //! [permissions]
+    QBluetoothPermission permission{};
+    permission.setCommunicationModes(QBluetoothPermission::Access);
+    switch (qApp->checkPermission(permission)) {
+    case Qt::PermissionStatus::Undetermined:
+        qApp->requestPermission(permission, this, &DeviceFinder::startSearch);
+        return;
+    case Qt::PermissionStatus::Denied:
+        setError(tr("Bluetooth permissions not granted!"));
+        return;
+    case Qt::PermissionStatus::Granted:
+        break; // proceed to search
+    }
+    //! [permissions]
+#endif // QT_CONFIG(permissions)
     clearMessages();
     m_deviceHandler->setDevice(nullptr);
     qDeleteAll(m_devices);
@@ -62,7 +88,18 @@ void DeviceFinder::addDevice(const QBluetoothDeviceInfo &device)
 {
     // If device is LowEnergy-device, add it to the list
     if (device.coreConfigurations() & QBluetoothDeviceInfo::LowEnergyCoreConfiguration) {
-        m_devices.append(new DeviceInfo(device));
+        auto devInfo = new DeviceInfo(device);
+        auto it = std::find_if(m_devices.begin(), m_devices.end(),
+                               [devInfo](DeviceInfo *dev) {
+                                   return devInfo->getAddress() == dev->getAddress();
+                               });
+        if (it == m_devices.end()) {
+            m_devices.append(devInfo);
+        } else {
+            auto oldDev = *it;
+            *it = devInfo;
+            delete oldDev;
+        }
         setInfo(tr("Low Energy device found. Scanning more..."));
 //! [devicediscovery-3]
         emit devicesChanged();
@@ -106,7 +143,7 @@ void DeviceFinder::connectToService(const QString &address)
     DeviceInfo *currentDevice = nullptr;
     for (QObject *entry : std::as_const(m_devices)) {
         auto device = qobject_cast<DeviceInfo *>(entry);
-        if (device && device->getAddress() == address ) {
+        if (device && device->getAddress() == address) {
             currentDevice = device;
             break;
         }

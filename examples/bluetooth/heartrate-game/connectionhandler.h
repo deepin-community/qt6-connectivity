@@ -4,17 +4,18 @@
 #ifndef CONNECTIONHANDLER_H
 #define CONNECTIONHANDLER_H
 
-#include <QBluetoothLocalDevice>
+#include <QtBluetooth/qbluetoothlocaldevice.h>
 
-#include <qqml.h>
+#include <QtCore/qobject.h>
 
-#include <QObject>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class ConnectionHandler : public QObject
 {
     Q_OBJECT
 
     Q_PROPERTY(bool alive READ alive NOTIFY deviceChanged)
+    Q_PROPERTY(bool hasPermission READ hasPermission NOTIFY deviceChanged)
     Q_PROPERTY(QString name READ name NOTIFY deviceChanged)
     Q_PROPERTY(QString address READ address NOTIFY deviceChanged)
     Q_PROPERTY(bool requiresAddressType READ requiresAddressType CONSTANT)
@@ -24,6 +25,7 @@ public:
     explicit ConnectionHandler(QObject *parent = nullptr);
 
     bool alive() const;
+    bool hasPermission() const;
     bool requiresAddressType() const;
     QString name() const;
     QString address() const;
@@ -33,9 +35,11 @@ signals:
 
 private slots:
     void hostModeChanged(QBluetoothLocalDevice::HostMode mode);
+    void initLocalDevice();
 
 private:
-    QBluetoothLocalDevice m_localDevice;
+    QBluetoothLocalDevice *m_localDevice = nullptr;
+    bool m_hasPermission = false;
 };
 
 #endif // CONNECTIONHANDLER_H

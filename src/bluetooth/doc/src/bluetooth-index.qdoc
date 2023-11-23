@@ -66,6 +66,16 @@ use cases. Further details can be found in the
 
 \include {module-use.qdocinc} {building_with_qmake} {bluetooth}
 
+\section1 Permissions
+
+Starting from Qt 6.6, the Qt Bluetooth module uses new \l QPermission API
+to handle \l {QBluetoothPermission}{Bluetooth} permissions. This means that Qt
+itself no longer queries for these permissions, so this needs to be done
+directly from the client application.
+
+Please refer to the \l {Application Permissions} page for an example of how
+to integrate the new \l QPermission API into the application.
+
 \section1 Related Information
 
 \section2 Building Qt Bluetooth
@@ -79,6 +89,23 @@ selected on Linux if BlueZ development headers are not found during build time
 or Qt was built without Qt D-Bus support.
 
 The usage of the dummy backend is highlighted via an appropriate warning while building and running.
+
+\section3 Linux Specific
+
+Since Qt 6.5 the Linux peripheral support has two backend alternatives:
+BlueZ DBus and Bluetooth kernel API. The Bluez DBus backend introduced in Qt 6.5 is
+intended as the eventual successor of the lower abstraction level kernel backend.
+
+The BlueZ DBus API is more limited in terms of features and is therefore not
+the default backend for compatibility reasons.
+
+The BlueZ DBus backend can be configured to use by setting
+the \e QT_BLUETOOTH_USE_DBUS_PERIPHERAL environment variable. The QLowEnergyController
+peripheral instantiation then introspects the presence of BlueZ DBus peripheral APIs
+on the local bluetooth adapter. The minimum version requirement for BlueZ is 5.56.
+
+One noteworthy difference is that with BlueZ DBus peripheral backend the user process no longer
+needs to have the \e CAP_NET_ADMIN capability (eg. run as root).
 
 \section3 \macos Specific
 The Bluetooth API on \macos requires a certain type of event dispatcher
@@ -143,7 +170,6 @@ quick way to enable all QtBluetooth logging is to add the following line to the
 \list
     \li QML
     \list
-        \li \l {pingpong}{QML Bluetooth PingPong}
         \li \l {heartrate-game}{Bluetooth Low Energy Heart Rate Game}
         \li \l {heartrate-server}{Bluetooth Low Energy Heart Rate Server}
         \li \l {lowenergyscanner}{Bluetooth Low Energy Scanner}
@@ -151,7 +177,6 @@ quick way to enable all QtBluetooth logging is to add the following line to the
     \li C++
     \list
         \li \l {btchat}{Bluetooth Chat}
-        \li \l {btscanner}{Bluetooth Scanner}
     \endlist
 \endlist
 

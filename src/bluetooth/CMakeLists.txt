@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 #####################################################################
 ## Bluetooth Module:
 #####################################################################
@@ -5,6 +8,7 @@
 qt_internal_add_module(Bluetooth
     SOURCES
         lecmaccalculator_p.h
+        removed_api.cpp
         qbluetooth.cpp qbluetooth.h
         qbluetoothaddress.cpp qbluetoothaddress.h
         qbluetoothdevicediscoveryagent.cpp qbluetoothdevicediscoveryagent.h qbluetoothdevicediscoveryagent_p.h
@@ -72,6 +76,17 @@ if(QT_FEATURE_bluez)
             bluez/properties.cpp bluez/properties_p.h
             bluez/remotedevicemanager.cpp bluez/remotedevicemanager_p.h
             bluez/servicemap.cpp bluez/servicemap_p.h
+            bluez/gattmanager1.cpp bluez/gattmanager1_p.h
+            bluez/leadvertisement1.cpp bluez/leadvertisement1_p.h
+            bluez/leadvertisingmanager1.cpp bluez/leadvertisingmanager1_p.h
+            bluez/objectmanageradaptor.cpp bluez/objectmanageradaptor_p.h
+            bluez/propertiesadaptor.cpp bluez/propertiesadaptor_p.h
+            bluez/gattcharacteristic1adaptor.cpp bluez/gattcharacteristic1adaptor_p.h
+            bluez/gattdescriptor1adaptor.cpp bluez/gattdescriptor1adaptor_p.h
+            bluez/gattservice1adaptor.cpp bluez/gattservice1adaptor_p.h
+            bluez/bluezperipheralapplication.cpp bluez/bluezperipheralapplication_p.h
+            bluez/bluezperipheralobjects.cpp bluez/bluezperipheralobjects_p.h
+            bluez/bluezperipheralconnectionmanager.cpp bluez/bluezperipheralconnectionmanager_p.h
             qbluetoothdevicediscoveryagent_bluez.cpp
             qbluetoothlocaldevice_bluez.cpp
             qbluetoothserver_bluez.cpp
@@ -88,6 +103,7 @@ if(QT_FEATURE_bluez)
             SOURCES
                 lecmaccalculator.cpp
                 qleadvertiser_bluez.cpp qleadvertiser_bluez_p.h
+                qleadvertiser_bluezdbus.cpp qleadvertiser_bluezdbus_p.h
                 qlowenergycontroller_bluez.cpp qlowenergycontroller_bluez_p.h
                 qlowenergycontroller_bluezdbus.cpp qlowenergycontroller_bluezdbus_p.h
         )
@@ -159,7 +175,6 @@ elseif(MACOS)
             darwin/btl2capchannel.mm darwin/btl2capchannel_p.h
             darwin/btledeviceinquiry.mm darwin/btledeviceinquiry_p.h
             darwin/btnotifier.cpp darwin/btnotifier_p.h
-            darwin/btobexsession.mm darwin/btobexsession_p.h
             darwin/btperipheralmanager.mm darwin/btperipheralmanager_p.h
             darwin/btraii.mm darwin/btraii_p.h
             darwin/btrfcommchannel.mm darwin/btrfcommchannel_p.h
@@ -175,13 +190,15 @@ elseif(MACOS)
             qbluetoothserviceinfo_macos.mm
             qbluetoothsocket_macos.mm qbluetoothsocket_macos_p.h
             qlowenergycontroller_darwin.mm qlowenergycontroller_darwin_p.h
+            qbluetoothuuid_darwin.mm
         DEFINES
             QT_OSX_BLUETOOTH
         LIBRARIES
+            Qt::CorePrivate
             ${FWFoundation}
             ${FWIOBluetooth}
     )
-elseif(IOS OR TVOS)
+elseif(IOS)
     qt_internal_extend_target(Bluetooth
         SOURCES
             darwin/btcentralmanager.mm darwin/btcentralmanager_p.h
@@ -199,19 +216,15 @@ elseif(IOS OR TVOS)
             qbluetoothserviceinfo_p.cpp
             qbluetoothsocket_dummy.cpp qbluetoothsocket_dummy_p.h
             qlowenergycontroller_darwin.mm qlowenergycontroller_darwin_p.h
+            darwin/btperipheralmanager.mm darwin/btperipheralmanager_p.h
+            qbluetoothuuid_darwin.mm
         DEFINES
             QT_IOS_BLUETOOTH
         LIBRARIES
+            Qt::CorePrivate
             ${FWCoreBluetooth}
             ${FWFoundation}
     )
-
-    if(IOS)
-        qt_internal_extend_target(Bluetooth
-            SOURCES
-                darwin/btperipheralmanager.mm darwin/btperipheralmanager_p.h
-        )
-    endif()
 elseif(QT_FEATURE_winrt_bt)
     qt_internal_extend_target(Bluetooth
         SOURCES
@@ -224,6 +237,10 @@ elseif(QT_FEATURE_winrt_bt)
             qbluetoothutils_winrt.cpp qbluetoothutils_winrt_p.h
             qlowenergycontroller_winrt.cpp qlowenergycontroller_winrt_p.h
             qbluetoothdevicewatcher_winrt.cpp qbluetoothdevicewatcher_winrt_p.h
+        NO_UNITY_BUILD_SOURCES
+            qbluetoothdevicediscoveryagent_winrt.cpp
+            qbluetoothdevicewatcher_winrt.cpp
+            qbluetoothlocaldevice_winrt.cpp
         DEFINES
             QT_WINRT_BLUETOOTH
         LIBRARIES
@@ -248,6 +265,7 @@ else()
             qlowenergycontroller_dummy.cpp qlowenergycontroller_dummy_p.h
     )
 endif()
+qt_update_ignore_pch_source(Bluetooth removed_api.cpp)
 
 qt_internal_add_docs(Bluetooth
     doc/qtbluetooth.qdocconf

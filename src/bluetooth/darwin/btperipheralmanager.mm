@@ -1,8 +1,7 @@
-// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
-
-
+#include "qlowenergyadvertisingparameters.h"
 #include "qlowenergycharacteristicdata.h"
 #include "qlowenergydescriptordata.h"
 #include "btperipheralmanager_p.h"
@@ -10,11 +9,15 @@
 #include "btnotifier_p.h"
 #include "qbluetooth.h"
 
+#include <QtCore/qstring.h>
 #include <QtCore/qdebug.h>
 #include <QtCore/qlist.h>
 
 #include <algorithm>
+#include <vector>
 #include <limits>
+#include <deque>
+#include <map>
 
 namespace
 {
@@ -123,7 +126,7 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
 
 }
 
-@interface QT_MANGLE_NAMESPACE(DarwinBTPeripheralManager) (PrivateAPI)
+@interface DarwinBTPeripheralManager (PrivateAPI)
 
 - (void)addConnectedCentral:(CBCentral *)central;
 - (CBService *)findIncludedService:(const QBluetoothUuid &)qtUUID;
@@ -140,7 +143,7 @@ bool qt_validate_value_range(const QLowEnergyCharacteristicData &data)
 
 @end
 
-@implementation QT_MANGLE_NAMESPACE(DarwinBTPeripheralManager)
+@implementation DarwinBTPeripheralManager
 {
     ObjCScopedPointer<CBPeripheralManager> manager;
     LECBManagerNotifier *notifier;

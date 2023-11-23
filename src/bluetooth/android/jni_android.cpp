@@ -12,6 +12,8 @@
 #include "android/inputstreamthread_p.h"
 #include "android/lowenergynotificationhub_p.h"
 
+QT_BEGIN_NAMESPACE
+
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
 
 typedef QHash<QByteArray, QJniObject> JCachedStringFields;
@@ -131,7 +133,8 @@ static bool registerNatives()
                                    LEHUB_SCOPED_METHOD(lowEnergy_characteristicWritten),
                                    LEHUB_SCOPED_METHOD(lowEnergy_descriptorWritten),
                                    LEHUB_SCOPED_METHOD(lowEnergy_characteristicChanged),
-                                   LEHUB_SCOPED_METHOD(lowEnergy_serviceError)
+                                   LEHUB_SCOPED_METHOD(lowEnergy_serviceError),
+                                   LEHUB_SCOPED_METHOD(lowEnergy_remoteRssiRead)
                                }))
     {
         __android_log_print(ANDROID_LOG_FATAL, logTag,
@@ -180,6 +183,8 @@ static bool registerNatives()
 
     return true;
 }
+
+QT_END_NAMESPACE
 
 Q_BLUETOOTH_EXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /*reserved*/)
 {

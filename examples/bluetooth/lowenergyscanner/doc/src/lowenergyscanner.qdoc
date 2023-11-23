@@ -4,7 +4,8 @@
 
 /*!
     \example lowenergyscanner
-    \title Bluetooth Low Energy Scanner Example
+    \title Bluetooth Low Energy Scanner
+    \examplecategory {Connectivity}
     \brief An application designed to browse the content of Bluetooth Low
     Energy peripheral devices. The example demonstrates the use of all Qt Bluetooth
     Low Energy classes.
@@ -32,6 +33,22 @@
 
     \include examples-run.qdocinc
 
+    \section1 Requesting Permission to use Bluetooth
+
+    On certain platforms, it is required to explicitly grant permissions for
+    using Bluetooth. The example uses \c BluetoothPermission QML object to
+    check and request the permissions, if required:
+
+    \snippet lowenergyscanner/Devices.qml permission-object
+
+    The permission request dialog is triggered when the user tries to start
+    the device discovery, and the permission status is \c {Undetermined}:
+
+    \snippet lowenergyscanner/Devices.qml permission-request
+
+    The device discovery starts if the permission is granted by the user.
+    Otherwise the application is non-functional.
+
     \section1 Scanning for Devices
 
     The first step is to find all peripheral devices. The devices can be found using
@@ -46,6 +63,10 @@
     device. It filters all found devices which
     have the \l QBluetoothDeviceInfo::LowEnergyCoreConfiguration flag and adds them to a
     list which is shown to the user.
+    The \l {QBluetoothDeviceDiscoveryAgent::}{deviceDiscovered()} signal may be
+    emitted multiple times for the same device as more details are discovered.
+    Here we match these device discoveries so that the user only sees the
+    individual devices:
 
     \snippet lowenergyscanner/device.cpp les-devicediscovery-3
 

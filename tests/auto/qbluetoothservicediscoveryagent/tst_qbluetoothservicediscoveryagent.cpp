@@ -54,7 +54,7 @@ tst_QBluetoothServiceDiscoveryAgent::tst_QBluetoothServiceDiscoveryAgent()
     if (androidBluetoothEmulator())
         return;
     // start Bluetooth if not started
-#ifndef Q_OS_OSX
+#ifndef Q_OS_MACOS
     QBluetoothLocalDevice *device = new QBluetoothLocalDevice();
     localDeviceAvailable = device->isValid();
     if (localDeviceAvailable) {
@@ -144,7 +144,7 @@ void tst_QBluetoothServiceDiscoveryAgent::tst_serviceDiscoveryStop()
 
 void tst_QBluetoothServiceDiscoveryAgent::tst_invalidBtAddress()
 {
-#ifdef Q_OS_OSX
+#ifdef Q_OS_MACOS
     if (!localDeviceAvailable)
         QSKIP("On OS X this test requires Bluetooth adapter in powered ON state");
 #endif
@@ -207,7 +207,7 @@ static void dumpAttributeVariant(const QVariant &var, const QString indent)
             qDebug("%suuid %08x", indent.toLocal8Bit().constData(), uuid.toUInt32());
             break;
         case 16: {
-            qDebug("%suuid %s", indent.toLocal8Bit().constData(), QByteArray(reinterpret_cast<const char *>(uuid.toUInt128().data), 16).toHex().constData());
+            qDebug("%suuid %s", indent.toLocal8Bit().constData(), uuid.toByteArray(QUuid::Id128).constData());
             break;
         }
         default:

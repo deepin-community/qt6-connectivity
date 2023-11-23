@@ -92,6 +92,9 @@ struct bt_security {
 #define HCIGETDEVINFO   _IOR('H', 211, int)
 #define HCIGETDEVLIST   _IOR('H', 210, int)
 
+// Generic 128 bits of data
+typedef QUuid::Id128Bytes BluezUint128;
+
 // Bluetooth address
 typedef struct {
     quint8 b[6];
@@ -117,39 +120,6 @@ struct sockaddr_rc {
 
 // Bt Low Energy related
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-
-static inline void btoh128(const quint128 *src, quint128 *dst)
-{
-    memcpy(dst, src, sizeof(quint128));
-}
-
-static inline void ntoh128(const quint128 *src, quint128 *dst)
-{
-    int i;
-
-    for (i = 0; i < 16; i++)
-        dst->data[15 - i] = src->data[i];
-}
-
-#elif __BYTE_ORDER == __BIG_ENDIAN
-
-static inline void btoh128(const quint128 *src, quint128 *dst)
-{
-    int i;
-
-    for (i = 0; i < 16; i++)
-        dst->data[15 - i] = src->data[i];
-}
-
-static inline void ntoh128(const quint128 *src, quint128 *dst)
-{
-    memcpy(dst, src, sizeof(quint128));
-}
-#else
-#error "Unknown byte order"
-#endif
-
 template<typename T> inline T getBtData(const void *ptr)
 {
     return qFromLittleEndian<T>(reinterpret_cast<const uchar *>(ptr));
@@ -164,12 +134,6 @@ template<typename T> inline void putBtData(T src, void *dst)
 {
     qToLittleEndian(src, reinterpret_cast<uchar *>(dst));
 }
-template<> inline void putBtData(quint128 src, void *dst)
-{
-    btoh128(&src, reinterpret_cast<quint128 *>(dst));
-}
-
-#define hton128(x, y) ntoh128(x, y)
 
 // HCI related
 

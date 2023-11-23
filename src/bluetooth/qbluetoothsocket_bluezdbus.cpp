@@ -25,9 +25,9 @@
 
 QT_BEGIN_NAMESPACE
 
-Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
+using namespace Qt::StringLiterals;
 
-static const QLatin1String profilePathTemplate("/qt/btsocket/%1%2/%3");
+Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
 QBluetoothSocketPrivateBluezDBus::QBluetoothSocketPrivateBluezDBus()
 {
@@ -84,8 +84,6 @@ static QString findRemoteDevicePath(const QBluetoothAddress &address)
     if (reply.isError())
         return QString();
 
-    QString remoteDevicePath;
-
     ManagedObjectList objectList = reply.value();
     for (ManagedObjectList::const_iterator it = objectList.constBegin();
                                            it != objectList.constEnd(); ++it) {
@@ -140,7 +138,7 @@ void QBluetoothSocketPrivateBluezDBus::connectToServiceHelper(
         // profile registration might fail in case other service uses same path
         // try 10 times and otherwise abort
 
-        profilePath = QString(profilePathTemplate).
+        profilePath = u"/qt/btsocket/%1%2/%3"_s.
                                   arg(sanitizeNameForDBus(QCoreApplication::applicationName())).
                                   arg(QCoreApplication::applicationPid()).
                                   arg(QRandomGenerator::global()->generate());

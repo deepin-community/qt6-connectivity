@@ -4,20 +4,24 @@
 #ifndef DEVICE_H
 #define DEVICE_H
 
-#include <qbluetoothlocaldevice.h>
-#include <QObject>
-#include <QVariant>
-#include <QList>
-#include <QBluetoothServiceDiscoveryAgent>
-#include <QBluetoothDeviceDiscoveryAgent>
-#include <QLowEnergyController>
-#include <QBluetoothServiceInfo>
+#include "characteristicinfo.h"
 #include "deviceinfo.h"
 #include "serviceinfo.h"
-#include "characteristicinfo.h"
 
-QT_FORWARD_DECLARE_CLASS (QBluetoothDeviceInfo)
-QT_FORWARD_DECLARE_CLASS (QBluetoothServiceInfo)
+#include <QtBluetooth/qbluetoothdevicediscoveryagent.h>
+#include <QtBluetooth/qlowenergycontroller.h>
+#include <QtBluetooth/qlowenergyservice.h>
+
+#include <QtCore/qlist.h>
+#include <QtCore/qobject.h>
+#include <QtCore/qvariant.h>
+
+#include <QtQmlIntegration/qqmlintegration.h>
+
+QT_BEGIN_NAMESPACE
+class QBluetoothDeviceInfo;
+class QBluetoothUuid;
+QT_END_NAMESPACE
 
 class Device: public QObject
 {
@@ -26,9 +30,14 @@ class Device: public QObject
     Q_PROPERTY(QVariant servicesList READ getServices NOTIFY servicesUpdated)
     Q_PROPERTY(QVariant characteristicList READ getCharacteristics NOTIFY characteristicsUpdated)
     Q_PROPERTY(QString update READ getUpdate WRITE setUpdate NOTIFY updateChanged)
-    Q_PROPERTY(bool useRandomAddress READ isRandomAddress WRITE setRandomAddress NOTIFY randomAddressChanged)
+    Q_PROPERTY(bool useRandomAddress READ isRandomAddress WRITE setRandomAddress
+               NOTIFY randomAddressChanged)
     Q_PROPERTY(bool state READ state NOTIFY stateChanged)
     Q_PROPERTY(bool controllerError READ hasControllerError)
+
+    QML_ELEMENT
+    QML_SINGLETON
+
 public:
     Device();
     ~Device();
@@ -44,6 +53,7 @@ public:
 
 public slots:
     void startDeviceDiscovery();
+    void stopDeviceDiscovery();
     void scanServices(const QString &address);
 
     void connectToService(const QString &uuid);
@@ -78,9 +88,9 @@ private:
     void setUpdate(const QString &message);
     QBluetoothDeviceDiscoveryAgent *discoveryAgent;
     DeviceInfo currentDevice;
-    QList<QObject *> devices;
-    QList<QObject *> m_services;
-    QList<QObject *> m_characteristics;
+    QList<DeviceInfo *> devices;
+    QList<ServiceInfo *> m_services;
+    QList<CharacteristicInfo *> m_characteristics;
     QString m_previousAddress;
     QString m_message;
     bool connected = false;

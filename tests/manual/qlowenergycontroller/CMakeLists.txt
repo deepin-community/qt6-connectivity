@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 cmake_minimum_required(VERSION 3.16...3.21)
 
 if(NOT TARGET Qt::Bluetooth)
@@ -26,7 +29,7 @@ else()
 qt_internal_add_test(tst_qlowenergycontroller_device
     SOURCES
         tst_qlowenergycontroller_device.cpp
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::Bluetooth
 )
 
@@ -35,6 +38,13 @@ qt_internal_extend_target(tst_qlowenergycontroller_device
     DEFINES
         QT_ANDROID_BLUETOOTH
 )
+
+if(MACOS)
+    # Explicitly link against the static permission plugin because tests
+    # currently don't have finalizers run for them except for iOS.
+    # TODO: Remove this when qtbase automatically runs finalizers for tests: QTBUG-112212
+    target_link_libraries(tst_qlowenergycontroller_device PRIVATE Qt6::QDarwinBluetoothPermissionPlugin)
+endif()
 
 endif()
 

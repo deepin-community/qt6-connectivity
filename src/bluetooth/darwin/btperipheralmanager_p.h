@@ -1,4 +1,4 @@
-// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #ifndef BTPERIPHERALMANAGER_P_H
@@ -17,17 +17,16 @@
 
 #include "btutility_p.h"
 
-#include "qlowenergyadvertisingparameters.h"
 #include "qlowenergyserviceprivate_p.h"
-#include "qbluetoothuuid.h"
 #include "qbluetooth.h"
 
 #include <QtCore/qsharedpointer.h>
 #include <QtCore/qbytearray.h>
-#include <QtCore/qsysinfo.h>
 #include <QtCore/qglobal.h>
 #include <QtCore/qpair.h>
 #include <QtCore/qmap.h>
+
+#include <QtCore/private/qcore_mac_p.h>
 
 #include <vector>
 #include <deque>
@@ -39,6 +38,8 @@
 
 QT_BEGIN_NAMESPACE
 
+class QLowEnergyAdvertisingParameters;
+class QLowEnergyAdvertisingData;
 class QLowEnergyServiceData;
 
 namespace DarwinBluetooth
@@ -121,5 +122,7 @@ using ValueRange = QPair<NSUInteger, NSUInteger>;
 - (void)peripheralManagerIsReadyToUpdateSubscribers:(CBPeripheralManager *)peripheral;
 
 @end
+
+QT_NAMESPACE_ALIAS_OBJC_CLASS(DarwinBTPeripheralManager);
 
 #endif
