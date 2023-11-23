@@ -3,11 +3,8 @@
 
 package org.qtproject.qt.android.nfc;
 
-import java.lang.Thread;
 import java.lang.Runnable;
 
-import android.os.Parcelable;
-import android.os.Looper;
 import android.content.Context;
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -15,21 +12,18 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.nfc.NfcAdapter;
 import android.content.IntentFilter.MalformedMimeTypeException;
-import android.os.Bundle;
 import android.os.Build;
+import android.os.Parcelable;
 import android.util.Log;
-import android.content.BroadcastReceiver;
 import android.content.pm.PackageManager;
 
 public class QtNfc
 {
-    /* static final QtNfc m_nfc = new QtNfc(); */
     static private final String TAG = "QtNfc";
-    static public NfcAdapter m_adapter = null;
-    static public PendingIntent m_pendingIntent = null;
-    static public IntentFilter[] m_filters;
-    static public Context m_context = null;
-    static public Activity m_activity = null;
+    static private NfcAdapter m_adapter = null;
+    static private PendingIntent m_pendingIntent = null;
+    static private Context m_context = null;
+    static private Activity m_activity = null;
 
     static public void setContext(Context context)
     {
@@ -43,7 +37,6 @@ public class QtNfc
         }
 
         if (m_adapter == null) {
-            //Log.e(TAG, "No NFC available");
             return;
         }
 
@@ -57,25 +50,9 @@ public class QtNfc
             0,
             new Intent(m_activity, m_activity.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             flags);
-
-        //Log.d(TAG, "Pending intent:" + m_pendingIntent);
-
-        IntentFilter filter = new IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED);
-
-        m_filters = new IntentFilter[]{
-            filter
-        };
-
-        try {
-            filter.addDataType("*/*");
-        } catch(MalformedMimeTypeException e) {
-            throw new RuntimeException("Fail", e);
-        }
-
-        //Log.d(TAG, "Thread:" + Thread.currentThread().getId());
     }
 
-    static public boolean start()
+    static public boolean startDiscovery()
     {
         if (m_adapter == null || m_activity == null
                || !m_activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_NFC))
@@ -83,7 +60,6 @@ public class QtNfc
 
         m_activity.runOnUiThread(new Runnable() {
             public void run() {
-                //Log.d(TAG, "Enabling NFC");
                 IntentFilter[] filters = new IntentFilter[3];
                 filters[0] = new IntentFilter();
                 filters[0].addAction(NfcAdapter.ACTION_TAG_DISCOVERED);
@@ -94,7 +70,7 @@ public class QtNfc
                 try {
                     filters[1].addDataType("*/*");
                 } catch (MalformedMimeTypeException e) {
-                    throw new RuntimeException("Check your mime type.");
+                    throw new RuntimeException("IntentFilter.addDataType() failed");
                 }
                 // some tags will report as tech, even if they are ndef formatted/formattable.
                 filters[2] = new IntentFilter();
@@ -114,7 +90,7 @@ public class QtNfc
         return true;
     }
 
-    static public boolean stop()
+    static public boolean stopDiscovery()
     {
         if (m_adapter == null || m_activity == null
                || !m_activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_NFC))
@@ -122,7 +98,6 @@ public class QtNfc
 
         m_activity.runOnUiThread(new Runnable() {
             public void run() {
-                //Log.d(TAG, "Disabling NFC");
                 try {
                     m_adapter.disableForegroundDispatch(m_activity);
                 } catch(IllegalStateException e) {
@@ -137,7 +112,6 @@ public class QtNfc
     static public boolean isEnabled()
     {
         if (m_adapter == null) {
-            //Log.e(TAG, "No NFC supported (Adapter is null)");
             return false;
         }
 
@@ -162,5 +136,10 @@ public class QtNfc
         } else {
             return null;
         }
+    }
+
+    static public Parcelable getTag(Intent intent)
+    {
+        return intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
     }
 }

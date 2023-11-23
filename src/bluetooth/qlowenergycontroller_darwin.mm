@@ -1,17 +1,13 @@
-// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2022 The Qt Company Ltd.
 // Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
-#include "darwin/btutility_p.h"
-#include "darwin/uistrings_p.h"
-
-#ifndef Q_OS_TVOS
-#include "darwin/btperipheralmanager_p.h"
-#endif // Q_OS_TVOS
-
 #include "qlowenergycontroller_darwin_p.h"
+#include "darwin/btperipheralmanager_p.h"
 #include "qlowenergyserviceprivate_p.h"
 #include "darwin/btcentralmanager_p.h"
+#include "darwin/btutility_p.h"
+#include "darwin/uistrings_p.h"
 
 #include "qlowenergyservicedata.h"
 #include "qbluetoothlocaldevice.h"
@@ -25,6 +21,8 @@
 #include <QtCore/qglobal.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qlist.h>
+#include <QtCore/qcoreapplication.h>
+#include <QtCore/qpermissions.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -85,12 +83,6 @@ UUIDList qt_servicesUuids(NSArray *services)
 
 } // unnamed namespace
 
-#ifndef Q_OS_TVOS
-using ObjCPeripheralManager = QT_MANGLE_NAMESPACE(DarwinBTPeripheralManager);
-#endif // Q_OS_TVOS
-
-using ObjCCentralManager = QT_MANGLE_NAMESPACE(DarwinBTCentralManager);
-
 QLowEnergyControllerPrivateDarwin::QLowEnergyControllerPrivateDarwin()
 {
     void registerQLowEnergyControllerMetaType();
@@ -103,68 +95,64 @@ QLowEnergyControllerPrivateDarwin::~QLowEnergyControllerPrivateDarwin()
 {
     if (const auto leQueue = DarwinBluetooth::qt_LE_queue()) {
         if (role == QLowEnergyController::CentralRole) {
-            const auto manager = centralManager.getAs<ObjCCentralManager>();
+            const auto manager = centralManager.getAs<DarwinBTCentralManager>();
             dispatch_sync(leQueue, ^{
                 [manager detach];
             });
         } else {
-#ifndef Q_OS_TVOS
-            const auto manager = peripheralManager.getAs<ObjCPeripheralManager>();
+            const auto manager = peripheralManager.getAs<DarwinBTPeripheralManager>();
             dispatch_sync(leQueue, ^{
                 [manager detach];
             });
-#endif
         }
     }
 }
 
 bool QLowEnergyControllerPrivateDarwin::isValid() const
 {
-#ifdef Q_OS_TVOS
-    return centralManager;
-#else
     return centralManager || peripheralManager;
-#endif
 }
 
 void QLowEnergyControllerPrivateDarwin::init()
 {
+    // We have to override the 'init', it's pure virtual in the base.
+    // Just creating a central or peripheral should not trigger any
+    // error yet.
+}
+
+bool QLowEnergyControllerPrivateDarwin::lazyInit()
+{
     using namespace DarwinBluetooth;
 
-    if (qt_appNeedsBluetoothUsageDescription() && !qt_appPlistContainsDescription(bluetoothUsageKey)) {
-        qCWarning(QT_BT_DARWIN)
-                << "The Info.plist file is required to contain "
-                   "'NSBluetoothAlwaysUsageDescription' entry";
-        return;
+    if (peripheralManager || centralManager)
+        return true;
+
+    if (qApp->checkPermission(QBluetoothPermission{}) != Qt::PermissionStatus::Granted) {
+        qCWarning(QT_BT_DARWIN,
+                  "Use of Bluetooth LE must be explicitly requested by the application.");
+        setError(QLowEnergyController::MissingPermissionsError);
+        return false;
     }
 
     std::unique_ptr<LECBManagerNotifier> notifier = std::make_unique<LECBManagerNotifier>();
     if (role == QLowEnergyController::PeripheralRole) {
-#ifndef Q_OS_TVOS
-        peripheralManager.reset([[ObjCPeripheralManager alloc] initWith:notifier.get()],
+        peripheralManager.reset([[DarwinBTPeripheralManager alloc] initWith:notifier.get()],
                                 DarwinBluetooth::RetainPolicy::noInitialRetain);
-        if (!peripheralManager) {
-            qCWarning(QT_BT_DARWIN) << "failed to create a peripheral manager";
-            return;
-        }
-#else
-        qCWarning(QT_BT_DARWIN) << "the peripheral role is not supported on your platform";
-        return;
-#endif // Q_OS_TVOS
+        Q_ASSERT(peripheralManager);
     } else {
-        centralManager.reset([[ObjCCentralManager alloc] initWith:notifier.get()],
+        centralManager.reset([[DarwinBTCentralManager alloc] initWith:notifier.get()],
                              DarwinBluetooth::RetainPolicy::noInitialRetain);
-        if (!centralManager) {
-            qCWarning(QT_BT_DARWIN) << "failed to initialize a central manager";
-            return;
-        }
+        Q_ASSERT(centralManager);
     }
 
+    // FIXME: Q_UNLIKELY
     if (!connectSlots(notifier.get()))
         qCWarning(QT_BT_DARWIN) << "failed to connect to notifier's signal(s)";
 
     // Ownership was taken by central manager.
     notifier.release();
+
+    return true;
 }
 
 void QLowEnergyControllerPrivateDarwin::connectToDevice()
@@ -172,40 +160,26 @@ void QLowEnergyControllerPrivateDarwin::connectToDevice()
     Q_ASSERT_X(state == QLowEnergyController::UnconnectedState,
                Q_FUNC_INFO, "invalid state");
 
-    if (qt_appNeedsBluetoothUsageDescription()
-            && !qt_appPlistContainsDescription(bluetoothUsageKey)) {
-        qCWarning(QT_BT_DARWIN)
-                << "The Info.plist file is required to contain "
-                   "'NSBluetoothAlwaysUsageDescription' entry";
-        return _q_CBManagerError(QLowEnergyController::MissingPermissionsError);
-    }
-
-    if (!isValid()) {
-        // init() had failed or was never called.
-        return _q_CBManagerError(QLowEnergyController::UnknownError);
-    }
-
     if (deviceUuid.isNull()) {
         // Wrong constructor was used or invalid UUID was provided.
         return _q_CBManagerError(QLowEnergyController::UnknownRemoteDeviceError);
     }
+
+    if (!lazyInit()) // MissingPermissionsError was emit.
+        return;
 
     // The logic enforcing the role is in the public class.
     Q_ASSERT_X(role != QLowEnergyController::PeripheralRole,
                Q_FUNC_INFO, "invalid role (peripheral)");
 
     dispatch_queue_t leQueue(DarwinBluetooth::qt_LE_queue());
-    if (!leQueue) {
-        qCWarning(QT_BT_DARWIN) << "no LE queue found";
-        setErrorDescription(QLowEnergyController::UnknownError);
-        return;
-    }
+    Q_ASSERT_X(leQueue, Q_FUNC_INFO, "invalid LE queue (nullptr)");
 
-    setErrorDescription(QLowEnergyController::NoError);
+    setError(QLowEnergyController::NoError);
     setState(QLowEnergyController::ConnectingState);
 
     const QBluetoothUuid deviceUuidCopy(deviceUuid);
-    ObjCCentralManager *manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager *manager = centralManager.getAs<DarwinBTCentralManager>();
     dispatch_async(leQueue, ^{
         [manager connectToDevice:deviceUuidCopy];
     });
@@ -213,13 +187,12 @@ void QLowEnergyControllerPrivateDarwin::connectToDevice()
 
 void QLowEnergyControllerPrivateDarwin::disconnectFromDevice()
 {
-    Q_ASSERT(isValid()); // Check for proper state is in q's code.
+    Q_ASSERT(isValid()); // Check for proper state is in Qt's code.
 
     if (role == QLowEnergyController::PeripheralRole) {
         // CoreBluetooth API intentionally does not provide any way of closing
         // a connection. All we can do here is to stop the advertisement.
-        stopAdvertising();
-        return;
+        return stopAdvertising();
     }
 
     const auto oldState = state;
@@ -228,7 +201,7 @@ void QLowEnergyControllerPrivateDarwin::disconnectFromDevice()
         setState(QLowEnergyController::ClosingState);
         invalidateServices();
 
-        auto manager = centralManager.getAs<ObjCCentralManager>();
+        auto manager = centralManager.getAs<DarwinBTCentralManager>();
         dispatch_async(leQueue, ^{
                            [manager disconnectFromDevice];
                        });
@@ -260,7 +233,7 @@ void QLowEnergyControllerPrivateDarwin::discoverServices()
 
     setState(QLowEnergyController::DiscoveringState);
 
-    ObjCCentralManager *manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager *manager = centralManager.getAs<DarwinBTCentralManager>();
     dispatch_async(leQueue, ^{
         [manager discoverServices];
     });
@@ -287,7 +260,7 @@ void QLowEnergyControllerPrivateDarwin::discoverServiceDetails(
     ServicePrivate qtService(serviceList.value(serviceUuid));
     qtService->setState(QLowEnergyService::RemoteServiceDiscovering);
     // Copy objects ...
-    ObjCCentralManager *manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager *manager = centralManager.getAs<DarwinBTCentralManager>();
     const QBluetoothUuid serviceUuidCopy(serviceUuid);
     dispatch_async(leQueue, ^{
         [manager discoverServiceDetails:serviceUuidCopy readValues:mode == QLowEnergyService::FullDiscovery];
@@ -304,17 +277,23 @@ void QLowEnergyControllerPrivateDarwin::requestConnectionUpdate(const QLowEnergy
 void QLowEnergyControllerPrivateDarwin::addToGenericAttributeList(const QLowEnergyServiceData &service,
                                                                   QLowEnergyHandle startHandle)
 {
+    // Darwin LE controller implements the addServiceHelper() for adding services, and thus
+    // the base class' addServiceHelper(), which calls this function, is not used
     Q_UNUSED(service);
     Q_UNUSED(startHandle);
-    // TODO: check why I don't need this (apparently it is used in addServiceHelper
-    // of the base class).
 }
 
 int QLowEnergyControllerPrivateDarwin::mtu() const
 {
+    // FIXME: check the state - neither public class does,
+    // nor us - not fun! E.g. readRssi correctly checked/asserted.
+
     __block int mtu = DarwinBluetooth::defaultMtu;
+    if (!isValid()) // A minimal check.
+        return defaultMtu;
+
     if (const auto leQueue = DarwinBluetooth::qt_LE_queue()) {
-        const auto *manager = centralManager.getAs<ObjCCentralManager>();
+        const auto *manager = centralManager.getAs<DarwinBTCentralManager>();
         dispatch_sync(leQueue, ^{
             mtu = [manager mtu];
         });
@@ -323,37 +302,32 @@ int QLowEnergyControllerPrivateDarwin::mtu() const
     return mtu;
 }
 
+void QLowEnergyControllerPrivateDarwin::readRssi()
+{
+    Q_ASSERT(role == QLowEnergyController::CentralRole);
+    Q_ASSERT(state == QLowEnergyController::ConnectedState ||
+             state == QLowEnergyController::DiscoveringState ||
+             state == QLowEnergyController::DiscoveredState);
+
+    if (const auto leQueue = DarwinBluetooth::qt_LE_queue()) {
+        const auto *manager = centralManager.getAs<DarwinBTCentralManager>();
+        dispatch_async(leQueue, ^{
+            [manager readRssi];
+        });
+    }
+}
+
 QLowEnergyService * QLowEnergyControllerPrivateDarwin::addServiceHelper(const QLowEnergyServiceData &service)
 {
-    // Three checks below should be removed, they are done in the q_ptr's class.
-#ifdef Q_OS_TVOS
-    Q_UNUSED(service);
-    qCDebug(QT_BT_DARWIN, "peripheral role is not supported on tvOS");
-#else
-    if (!isValid()) {
+    if (!lazyInit() || !isValid()) {
         qCWarning(QT_BT_DARWIN) << "invalid peripheral";
-        return nullptr;
-    }
-
-    if (role != QLowEnergyController::PeripheralRole) {
-        qCWarning(QT_BT_DARWIN) << "not in peripheral role";
-        return nullptr;
-    }
-
-    if (state != QLowEnergyController::UnconnectedState) {
-        qCWarning(QT_BT_DARWIN) << "invalid state";
-        return nullptr;
-    }
-
-    if (!service.isValid()) {
-        qCWarning(QT_BT_DARWIN) << "invalid service";
         return nullptr;
     }
 
     for (auto includedService : service.includedServices())
         includedService->d_ptr->type |= QLowEnergyService::IncludedService;
 
-    const auto manager = peripheralManager.getAs<ObjCPeripheralManager>();
+    const auto manager = peripheralManager.getAs<DarwinBTPeripheralManager>();
     Q_ASSERT(manager);
     if (const auto servicePrivate = [manager addService:service]) {
         servicePrivate->setController(this);
@@ -361,7 +335,7 @@ QLowEnergyService * QLowEnergyControllerPrivateDarwin::addServiceHelper(const QL
         localServices.insert(servicePrivate->uuid, servicePrivate);
         return new QLowEnergyService(servicePrivate);
     }
-#endif // Q_OS_TVOS
+
     return nullptr;
 }
 
@@ -394,7 +368,7 @@ void QLowEnergyControllerPrivateDarwin::_q_serviceDiscoveryFinished()
 
     QT_BT_MAC_AUTORELEASEPOOL;
 
-    NSArray *const services = [centralManager.getAs<ObjCCentralManager>() peripheral].services;
+    NSArray *const services = [centralManager.getAs<DarwinBTCentralManager>() peripheral].services;
     // Now we have to traverse the discovered services tree.
     // Essentially it's an iterative version of more complicated code from the
     // DarwinBTCentralManager's code.
@@ -680,10 +654,13 @@ void QLowEnergyControllerPrivateDarwin::_q_CBManagerError(QLowEnergyController::
     setError(errorCode);
 
     if (state == QLowEnergyController::ConnectingState
-            || state == QLowEnergyController::AdvertisingState)
+            || state == QLowEnergyController::AdvertisingState) {
         setState(QLowEnergyController::UnconnectedState);
-    else if (state == QLowEnergyController::DiscoveringState)
+    } else if (state == QLowEnergyController::DiscoveringState) {
+        // An error occurred during service discovery, finish the discovery.
         setState(QLowEnergyController::ConnectedState);
+        emit q_ptr->discoveryFinished();
+    }
 
     // In any other case we stay in Discovered, it's
     // a service/characteristic - related error.
@@ -755,7 +732,7 @@ void QLowEnergyControllerPrivateDarwin::setNotifyValue(QSharedPointer<QLowEnergy
     dispatch_queue_t leQueue(DarwinBluetooth::qt_LE_queue());
     Q_ASSERT_X(leQueue, Q_FUNC_INFO, "no LE queue found");
 
-    ObjCCentralManager *manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager *manager = centralManager.getAs<DarwinBTCentralManager>();
     const QBluetoothUuid serviceUuid(service->uuid);
     const QByteArray newValueCopy(newValue);
     dispatch_async(leQueue, ^{
@@ -791,7 +768,7 @@ void QLowEnergyControllerPrivateDarwin::readCharacteristic(const QSharedPointer<
     Q_ASSERT_X(leQueue, Q_FUNC_INFO, "no LE queue found");
 
     // Attention! We have to copy UUID.
-    ObjCCentralManager *manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager *manager = centralManager.getAs<DarwinBTCentralManager>();
     const QBluetoothUuid serviceUuid(service->uuid);
     dispatch_async(leQueue, ^{
         [manager readCharacteristic:charHandle onService:serviceUuid];
@@ -825,7 +802,7 @@ void QLowEnergyControllerPrivateDarwin::writeCharacteristic(const QSharedPointer
     const QByteArray newValueCopy(newValue);
     if (role == QLowEnergyController::CentralRole) {
         const QBluetoothUuid serviceUuid(service->uuid);
-        const auto manager = centralManager.getAs<ObjCCentralManager>();
+        const auto manager = centralManager.getAs<DarwinBTCentralManager>();
         dispatch_async(leQueue, ^{
             [manager write:newValueCopy
                 charHandle:charHandle
@@ -833,14 +810,10 @@ void QLowEnergyControllerPrivateDarwin::writeCharacteristic(const QSharedPointer
                  withResponse:mode == QLowEnergyService::WriteWithResponse];
         });
     } else {
-#ifndef Q_OS_TVOS
-        const auto manager = peripheralManager.getAs<ObjCPeripheralManager>();
+        const auto manager = peripheralManager.getAs<DarwinBTPeripheralManager>();
         dispatch_async(leQueue, ^{
             [manager write:newValueCopy charHandle:charHandle];
         });
-#else
-        qCWarning(QT_BT_DARWIN) << "peripheral role is not supported on your platform";
-#endif
     }
 }
 
@@ -891,7 +864,7 @@ void QLowEnergyControllerPrivateDarwin::readDescriptor(const QSharedPointer<QLow
     }
     // Attention! Copy objects!
     const QBluetoothUuid serviceUuid(service->uuid);
-    ObjCCentralManager * const manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager * const manager = centralManager.getAs<DarwinBTCentralManager>();
     dispatch_async(leQueue, ^{
         [manager readDescriptor:descriptorHandle
                  onService:serviceUuid];
@@ -925,7 +898,7 @@ void QLowEnergyControllerPrivateDarwin::writeDescriptor(const QSharedPointer<QLo
     Q_ASSERT_X(leQueue, Q_FUNC_INFO, "no LE queue found");
     // Attention! Copy objects!
     const QBluetoothUuid serviceUuid(service->uuid);
-    ObjCCentralManager * const manager = centralManager.getAs<ObjCCentralManager>();
+    DarwinBTCentralManager * const manager = centralManager.getAs<DarwinBTCentralManager>();
     const QByteArray newValueCopy(newValue);
     dispatch_async(leQueue, ^{
         [manager write:newValueCopy
@@ -958,43 +931,6 @@ quint16 QLowEnergyControllerPrivateDarwin::updateValueOfDescriptor(QLowEnergyHan
     }
 
     return 0;
-}
-
-void QLowEnergyControllerPrivateDarwin::setErrorDescription(QLowEnergyController::Error errorCode)
-{
-    // This function does not emit!
-    // TODO: well, it is not a reason to duplicate a significant part of
-    // setError though!
-
-    error = errorCode;
-
-    switch (error) {
-    case QLowEnergyController::NoError:
-        errorString.clear();
-        break;
-    case QLowEnergyController::UnknownRemoteDeviceError:
-        errorString = QLowEnergyController::tr("Remote device cannot be found");
-        break;
-    case QLowEnergyController::InvalidBluetoothAdapterError:
-        errorString = QLowEnergyController::tr("Cannot find local adapter");
-        break;
-    case QLowEnergyController::NetworkError:
-        errorString = QLowEnergyController::tr("Error occurred during connection I/O");
-        break;
-    case QLowEnergyController::ConnectionError:
-        errorString = QLowEnergyController::tr("Error occurred trying to connect to remote device.");
-        break;
-    case QLowEnergyController::AdvertisingError:
-        errorString = QLowEnergyController::tr("Error occurred trying to start advertising");
-        break;
-    case QLowEnergyController::MissingPermissionsError:
-        errorString = QLowEnergyController::tr("Error missing permission");
-        break;
-    case QLowEnergyController::UnknownError:
-    default:
-        errorString = QLowEnergyController::tr("Unknown Error");
-        break;
-    }
 }
 
 bool QLowEnergyControllerPrivateDarwin::connectSlots(DarwinBluetooth::LECBManagerNotifier *notifier)
@@ -1035,6 +971,8 @@ bool QLowEnergyControllerPrivateDarwin::connectSlots(DarwinBluetooth::LECBManage
                        this, SLOT(_q_CBManagerError(const QBluetoothUuid &, QLowEnergyService::ServiceError)));
     ok = ok && connect(notifier, &LECBManagerNotifier::mtuChanged, this,
                        &QLowEnergyControllerPrivateDarwin::_q_mtuChanged);
+    ok = ok && connect(notifier, &LECBManagerNotifier::rssiUpdated, q_ptr,
+                       &QLowEnergyController::rssiRead, Qt::QueuedConnection);
 
     if (!ok)
         notifier->disconnect();
@@ -1046,36 +984,13 @@ void QLowEnergyControllerPrivateDarwin::startAdvertising(const QLowEnergyAdverti
                                                          const QLowEnergyAdvertisingData &advertisingData,
                                                          const QLowEnergyAdvertisingData &scanResponseData)
 {
-#ifdef Q_OS_TVOS
-    Q_UNUSED(params);
-    Q_UNUSED(advertisingData);
-    Q_UNUSED(scanResponseData);
-    qCWarning(QT_BT_DARWIN) << "advertising is not supported on your platform";
-#else
-
-    if (role != QLowEnergyController::PeripheralRole) {
-        qCWarning(QT_BT_DARWIN) << "controller is not a peripheral, cannot start advertising";
+    if (!lazyInit()) // Error was emit already.
         return;
-    }
-
-    if (!isValid()) {
-        qCWarning(QT_BT_DARWIN, "LE controller is an invalid peripheral");
-        return;
-    }
-
-    if (state != QLowEnergyController::UnconnectedState) {
-        qCWarning(QT_BT_DARWIN) << "invalid state" << state;
-        return;
-    }
 
     auto leQueue(DarwinBluetooth::qt_LE_queue());
-    if (!leQueue) {
-        qCWarning(QT_BT_DARWIN) << "no LE queue found";
-        setErrorDescription(QLowEnergyController::UnknownError);
-        return;
-    }
+    Q_ASSERT_X(leQueue, Q_FUNC_INFO, "invalid LE queue (nullptr)");
 
-    const auto manager = peripheralManager.getAs<ObjCPeripheralManager>();
+    const auto manager = peripheralManager.getAs<DarwinBTPeripheralManager>();
     [manager setParameters:params data:advertisingData scanResponse:scanResponseData];
 
     setState(QLowEnergyController::AdvertisingState);
@@ -1083,14 +998,10 @@ void QLowEnergyControllerPrivateDarwin::startAdvertising(const QLowEnergyAdverti
     dispatch_async(leQueue, ^{
         [manager startAdvertising];
     });
-#endif
 }
 
 void QLowEnergyControllerPrivateDarwin::stopAdvertising()
 {
-#ifdef Q_OS_TVOS
-    qCWarning(QT_BT_DARWIN) << "advertising is not supported on your platform";
-#else
     if (!isValid())
         return _q_CBManagerError(QLowEnergyController::UnknownError);
 
@@ -1099,19 +1010,14 @@ void QLowEnergyControllerPrivateDarwin::stopAdvertising()
         return;
     }
 
-    if (const auto leQueue = DarwinBluetooth::qt_LE_queue()) {
-        const auto manager = peripheralManager.getAs<ObjCPeripheralManager>();
-        dispatch_sync(leQueue, ^{
-            [manager stopAdvertising];
-        });
+    const auto leQueue = DarwinBluetooth::qt_LE_queue();
+    Q_ASSERT_X(leQueue, Q_FUNC_INFO, "invalid LE queue (nullptr)");
+    const auto manager = peripheralManager.getAs<DarwinBTPeripheralManager>();
+    dispatch_sync(leQueue, ^{
+                      [manager stopAdvertising];
+                  });
 
-        setState(QLowEnergyController::UnconnectedState);
-    } else {
-        qCWarning(QT_BT_DARWIN) << "no LE queue found";
-        setErrorDescription(QLowEnergyController::UnknownError);
-        return;
-    }
-#endif
+    setState(QLowEnergyController::UnconnectedState);
 }
 
 QT_END_NAMESPACE

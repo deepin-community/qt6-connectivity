@@ -12,8 +12,16 @@
 #include <QScopeGuard>
 #include <QBluetoothLocalDevice>
 
-static const QLatin1String largeCharacteristicServiceUuid("1f85e37c-ac16-11eb-ae5c-93d3a763feed");
-static const QLatin1String largeCharacteristicCharUuid("40e4f68e-ac16-11eb-9956-cfe55a8c370c");
+#if QT_CONFIG(permissions)
+#include <QtCore/qcoreapplication.h>
+#include <QtCore/qpermissions.h>
+#include <QtCore/qnamespace.h>
+#endif
+
+static const QLatin1String largeAttributeServiceUuid("1f85e37c-ac16-11eb-ae5c-93d3a763feed");
+static const QLatin1String largeAttributeCharUuid("40e4f68e-ac16-11eb-9956-cfe55a8c370c");
+static const QLatin1String largeAttributeDescUuid("44e4f68e-ac16-11eb-9956-cfe55a8c370c");
+static constexpr qsizetype largeAttributeSize{508}; // Size for char and desc values
 
 static const QLatin1String platformIdentifierServiceUuid("4a92cb7f-5031-4a09-8304-3e89413f458d");
 static const QLatin1String platformIdentifierCharUuid("6b0ecf7c-5f09-4c87-aaab-bb49d5d383aa");
@@ -37,9 +45,14 @@ static const QLatin1String repeatedWriteTargetCharUuid("2192ee43-6d17-4e78-b286-
 static const QLatin1String repeatedWriteNotifyCharUuid("b3f9d1a2-3d55-49c9-8b29-e09cec77ff86");
 
 
-
+// With the defines below some test cases are picked on at compile-time as opposed to runtime skips
+// to avoid the lengthy init() and clean() executions
 #if defined(QT_ANDROID_BLUETOOTH) || defined(QT_WINRT_BLUETOOTH) || defined(Q_OS_DARWIN)
 #define QT_BLUETOOTH_MTU_SUPPORTED
+#endif
+
+#if defined(QT_ANDROID_BLUETOOTH) || defined(Q_OS_DARWIN)
+#define QT_BLUETOOTH_RSSI_SUPPORTED
 #endif
 
 #if defined(QT_BLUETOOTH_MTU_SUPPORTED)
@@ -80,7 +93,11 @@ private slots:
 #if defined(QT_BLUETOOTH_MTU_SUPPORTED)
     void checkMtuNegotiation();
 #endif
+#if defined(QT_BLUETOOTH_RSSI_SUPPORTED)
+    void rssiRead();
+#endif
     void readWriteLargeCharacteristic();
+    void readWriteLargeDescriptor();
     void readDuringServiceDiscovery();
     void readNotificationAndIndicationProperty();
     void testNotificationAndIndication();
@@ -98,6 +115,9 @@ private:
     QBluetoothDeviceInfo mRemoteDeviceInfo;
     QString mServerDeviceName;
     QByteArray mServerPlatform;
+#if QT_CONFIG(permissions)
+    Qt::PermissionStatus permissionStatus = Qt::PermissionStatus::Undetermined;
+#endif
 };
 
 // connectionCounter is used to check that the server-side connect events
@@ -109,12 +129,30 @@ int tst_qlowenergycontroller_device::connectionCounter = -1;
 tst_qlowenergycontroller_device::tst_qlowenergycontroller_device()
 {
     QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
+#if QT_CONFIG(permissions)
+    // FIXME: Android has more specific BT permissions, fix when appropriate
+    // change is done in qtbase
+    permissionStatus = qApp->checkPermission(QBluetoothPermission{});
+    if (qApp->checkPermission(QBluetoothPermission{}) == Qt::PermissionStatus::Undetermined) {
+        QTestEventLoop loop;
+        qApp->requestPermission(QBluetoothPermission{}, [this, &loop](const QPermission &permission){
+            permissionStatus = permission.status();
+            loop.exitLoop();
+        });
+        if (permissionStatus == Qt::PermissionStatus::Undetermined)
+            loop.enterLoopMSecs(30000);
+    }
+#endif
 }
 
 tst_qlowenergycontroller_device::~tst_qlowenergycontroller_device() { }
 
 void tst_qlowenergycontroller_device::initTestCase()
 {
+#if QT_CONFIG(permissions)
+    if (permissionStatus != Qt::PermissionStatus::Granted)
+        QSKIP("This manual test requires Blutooth permissions granted.");
+#endif
     qDebug() << "Testcase build time: " << __TIME__;
     mDevAgent.reset(new QBluetoothDeviceDiscoveryAgent(this));
     mDevAgent->setLowEnergyDiscoveryTimeout(75000);
@@ -229,17 +267,10 @@ void tst_qlowenergycontroller_device::readServerPlatform()
 
 
 #if defined(QT_BLUETOOTH_MTU_SUPPORTED)
-// Don't use QSKIP here as that
-// would still cause lengthy init() and clean() executions.
 void tst_qlowenergycontroller_device::checkMtuNegotiation()
 {
     // service discovery, including MTU negotiation
     qDebug() << "Client-side MTU after connect" << mController->mtu();
-#if ! defined(Q_OS_DARWIN)
-    // The check below usually passes, but sometimes the BT stack gives a cached value
-    // from a previous testcase run and the below fails => avoid flakiness
-    QCOMPARE(mController->mtu(), 23);
-#endif
     QVERIFY(mController->services().isEmpty());
     mController->discoverServices();
     QTRY_COMPARE(mController->state(), QLowEnergyController::DiscoveredState);
@@ -267,8 +298,124 @@ void tst_qlowenergycontroller_device::checkMtuNegotiation()
         QCOMPARE(mtu, mController->mtu());
 }
 #endif
-
 #undef QT_BLUETOOTH_MTU_SUPPORTED
+
+#if defined(QT_BLUETOOTH_RSSI_SUPPORTED)
+
+#define READ_AND_VERIFY_RSSI_VALUE \
+        errorSpy.clear(); \
+        rssiSpy.clear();  \
+        mController->readRssi(); \
+        QTRY_VERIFY(!rssiSpy.isEmpty()); \
+        QVERIFY(errorSpy.isEmpty()); \
+        rssi = rssiSpy.takeFirst().at(0).toInt(); \
+        QCOMPARE_GE(rssi, -127); \
+        QCOMPARE_LE(rssi, 127);  \
+
+void tst_qlowenergycontroller_device::rssiRead()
+{
+    QSignalSpy errorSpy(mController.get(), &QLowEnergyController::errorOccurred);
+    QSignalSpy rssiSpy(mController.get(), &QLowEnergyController::rssiRead);
+    int rssi = 1000; // valid values are -127..127
+
+    // 1) Read RSSI in connected state
+    QCOMPARE(mController->state(), QLowEnergyController::ConnectedState);
+    READ_AND_VERIFY_RSSI_VALUE;
+    // Check that the value changes. This might seem flaky with stationary bluetooth
+    // devices but in practice the RSSI constantly fluctuates
+    const int initialRssi = rssi;
+    for (int attempt = 1; attempt < 20; attempt++) {
+        READ_AND_VERIFY_RSSI_VALUE;
+        QTest::qWait(200); // Provide a bit time for the RSSI to change
+        if (rssi != initialRssi)
+            break;
+    }
+    QVERIFY(rssi != initialRssi);
+
+    // 2) Read RSSI while discovering services
+    QVERIFY(mController->services().isEmpty());
+    mController->discoverServices();
+    QCOMPARE(mController->state(), QLowEnergyController::DiscoveringState);
+    READ_AND_VERIFY_RSSI_VALUE;
+
+    // 3) Read RSSI after services have been discovered
+    QTRY_COMPARE(mController->state(), QLowEnergyController::DiscoveredState);
+    READ_AND_VERIFY_RSSI_VALUE;
+
+    // 4) Read RSSI while discovering service details
+    QSharedPointer<QLowEnergyService> service(mController->createServiceObject(
+            QBluetoothUuid(repeatedWriteServiceUuid)));
+    QVERIFY(service != nullptr);
+    service->discoverDetails(QLowEnergyService::FullDiscovery);
+    QCOMPARE(service->state(), QLowEnergyService::ServiceState::RemoteServiceDiscovering);
+    READ_AND_VERIFY_RSSI_VALUE;
+
+    // 5) Read RSSI after service detail discovery
+    QTRY_COMPARE(service->state(), QLowEnergyService::ServiceState::RemoteServiceDiscovered);
+    READ_AND_VERIFY_RSSI_VALUE;
+
+    checkconnectionCounter(mController);
+
+    // 6) Read RSSI amidst characteristic reads and writes
+    QSignalSpy writeSpy(service.get(), &QLowEnergyService::characteristicWritten);
+    QSignalSpy readSpy(service.get(), &QLowEnergyService::characteristicRead);
+    auto characteristic = service->characteristic(QBluetoothUuid(repeatedWriteTargetCharUuid));
+    QByteArray value(8, 'a');
+    service->writeCharacteristic(characteristic, value);
+    READ_AND_VERIFY_RSSI_VALUE;
+    QTRY_VERIFY(!writeSpy.isEmpty());
+
+    service->readCharacteristic(characteristic);
+    READ_AND_VERIFY_RSSI_VALUE;
+    QTRY_VERIFY(!readSpy.isEmpty());
+
+    // A bit of stress-testing to check that read/write and
+    // RSSI reading don't interfere with one another
+    writeSpy.clear();
+    readSpy.clear();
+    rssiSpy.clear();
+    errorSpy.clear();
+    const int TIMES = 5;
+    for (int i = 0; i < TIMES; i++) {
+        mController->readRssi();
+        service->writeCharacteristic(characteristic, value);
+        mController->readRssi();
+        service->readCharacteristic(characteristic);
+    }
+    QTRY_COMPARE(writeSpy.size(), TIMES);
+    QTRY_COMPARE(readSpy.size(), TIMES);
+#if defined(Q_OS_ANDROID)
+    QTRY_COMPARE(rssiSpy.size(), TIMES * 2);
+#else
+    // On darwin several pending requests will get one callback
+    QTRY_COMPARE_GE(rssiSpy.size(), 1);
+#endif
+    QVERIFY(errorSpy.isEmpty());
+
+    // 7) Disconnect the device and verify we get error for RSSI read
+    errorSpy.clear();
+    rssiSpy.clear();
+    mController->disconnectFromDevice();
+    // First right after requesting disconnect
+    mController->readRssi();
+    QTRY_COMPARE(errorSpy.size(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<QLowEnergyController::Error>(),
+             QLowEnergyController::Error::RssiReadError);
+    QCOMPARE(mController->error(), QLowEnergyController::Error::RssiReadError);
+    QVERIFY(rssiSpy.isEmpty());
+
+    // Then once the disconnection is complete
+    QTRY_COMPARE(mController->state(), QLowEnergyController::UnconnectedState);
+    errorSpy.clear();
+    mController->readRssi();
+    QTRY_COMPARE(errorSpy.size(), 1);
+    QCOMPARE(errorSpy.takeFirst().at(0).value<QLowEnergyController::Error>(),
+             QLowEnergyController::Error::RssiReadError);
+    QCOMPARE(mController->error(), QLowEnergyController::Error::RssiReadError);
+    QVERIFY(rssiSpy.isEmpty());
+}
+#endif
+#undef QT_BLUETOOTH_RSSI_SUPPORTED
 
 void tst_qlowenergycontroller_device::checkconnectionCounter(
         std::unique_ptr<QLowEnergyController> &mController)
@@ -298,6 +445,15 @@ void tst_qlowenergycontroller_device::checkconnectionCounter(
 
 void tst_qlowenergycontroller_device::readWriteLargeCharacteristic()
 {
+    // This tests reading and writing a large characteristic value
+    //
+    // Most modern platforms cope with up-to 512 bytes. One exception is Bluez DBus peripheral,
+    // which may reject a write from client when going above 508 due to the way it internally
+    // checks the payload size (tested with Bluez 5.64).
+    //
+    // This test can also be used for testing long (aka prepared) writes & reads by setting
+    // the MTU to for example 50 bytes. Asking a specific MTU is platform-specific and
+    // there is no Qt API for it
     QVERIFY(mController->services().isEmpty());
     mController->discoverServices();
     QTRY_COMPARE(mController->state(), QLowEnergyController::DiscoveredState);
@@ -305,18 +461,17 @@ void tst_qlowenergycontroller_device::readWriteLargeCharacteristic()
     checkconnectionCounter(mController);
 
     QSharedPointer<QLowEnergyService> service(
-            mController->createServiceObject(QBluetoothUuid(largeCharacteristicServiceUuid)));
+            mController->createServiceObject(QBluetoothUuid(largeAttributeServiceUuid)));
     QVERIFY(service != nullptr);
     service->discoverDetails(QLowEnergyService::SkipValueDiscovery);
     QTRY_COMPARE(service->state(), QLowEnergyService::ServiceState::RemoteServiceDiscovered);
 
     QSignalSpy readSpy(service.get(), &QLowEnergyService::characteristicRead);
     QSignalSpy writtenSpy(service.get(), &QLowEnergyService::characteristicWritten);
-    QCOMPARE(readSpy.size(), 0);
-    QCOMPARE(writtenSpy.size(), 0);
 
-    // The service discovery skipped the values => check that the default value is all zeroes
-    auto characteristic = service->characteristic(QBluetoothUuid(largeCharacteristicCharUuid));
+    // The service discovery skipped the values => check that the default values are all zeroes
+    auto characteristic = service->characteristic(QBluetoothUuid(largeAttributeCharUuid));
+    QVERIFY(characteristic.isValid());
     QByteArray testArray(0);
     qDebug() << "Initial large characteristic value:" << characteristic.value();
     QCOMPARE(characteristic.value(), testArray);
@@ -325,12 +480,12 @@ void tst_qlowenergycontroller_device::readWriteLargeCharacteristic()
     service->readCharacteristic(characteristic);
     QTRY_COMPARE(readSpy.size(), 1);
     qDebug() << "Large characteristic value after read:" << characteristic.value();
-    testArray = QByteArray(512, 0);
+    testArray = QByteArray(largeAttributeSize, 0);
     testArray[0] = 0x0b;
     QCOMPARE(characteristic.value(), testArray);
 
     // Write a new value to characteristic and read it back
-    for (int i = 0; i < 512; ++i) {
+    for (int i = 0; i < largeAttributeSize; ++i) {
         testArray[i] = i % 5;
     }
     service->writeCharacteristic(characteristic, testArray);
@@ -343,6 +498,54 @@ void tst_qlowenergycontroller_device::readWriteLargeCharacteristic()
     QCOMPARE(characteristic.value(), testArray);
 }
 
+void tst_qlowenergycontroller_device::readWriteLargeDescriptor()
+{
+    // This tests reading and writing a large descriptor value
+    QVERIFY(mController->services().isEmpty());
+    mController->discoverServices();
+    QTRY_COMPARE(mController->state(), QLowEnergyController::DiscoveredState);
+
+    checkconnectionCounter(mController);
+
+    QSharedPointer<QLowEnergyService> service(
+            mController->createServiceObject(QBluetoothUuid(largeAttributeServiceUuid)));
+    QVERIFY(service != nullptr);
+    service->discoverDetails(QLowEnergyService::FullDiscovery);
+    QTRY_COMPARE(service->state(), QLowEnergyService::ServiceState::RemoteServiceDiscovered);
+
+    QSignalSpy readSpy(service.get(), &QLowEnergyService::descriptorRead);
+    QSignalSpy writtenSpy(service.get(), &QLowEnergyService::descriptorWritten);
+
+    auto characteristic = service->characteristic(QBluetoothUuid(largeAttributeCharUuid));
+    QVERIFY(characteristic.isValid());
+    auto descriptor = characteristic.descriptor(QBluetoothUuid(largeAttributeDescUuid));
+    QVERIFY(descriptor.isValid());
+
+    QByteArray testArray = QByteArray(largeAttributeSize, 0);
+    testArray[0] = 0xdd;
+
+    // Read descriptor value and verify it is what the server set (0xdd 0x00 ..)
+    QVERIFY(readSpy.isEmpty());
+    QVERIFY(writtenSpy.isEmpty());
+    service->readDescriptor(descriptor);
+    QTRY_COMPARE(readSpy.size(), 1);
+    qDebug() << "Large descriptor value after read:" << descriptor.value();
+    QCOMPARE(descriptor.value(), testArray);
+
+    // Write a new value to descriptor and read it back
+    for (int i = 0; i < largeAttributeSize; ++i) {
+        testArray[i] = i % 5;
+    }
+    service->writeDescriptor(descriptor, testArray);
+    QCOMPARE(service->error(), QLowEnergyService::ServiceError::NoError);
+    QTRY_COMPARE(writtenSpy.size(), 1);
+
+    service->readDescriptor(descriptor);
+    QTRY_COMPARE(readSpy.size(), 2);
+    qDebug() << "Large descriptor value after write/read:" << descriptor.value();
+    QCOMPARE(descriptor.value(), testArray);
+}
+
 void tst_qlowenergycontroller_device::readDuringServiceDiscovery()
 {
     QVERIFY(mController->services().isEmpty());
@@ -352,7 +555,7 @@ void tst_qlowenergycontroller_device::readDuringServiceDiscovery()
     checkconnectionCounter(mController);
 
     QSharedPointer<QLowEnergyService> service(
-            mController->createServiceObject(QBluetoothUuid(largeCharacteristicServiceUuid)));
+            mController->createServiceObject(QBluetoothUuid(largeAttributeServiceUuid)));
     QVERIFY(service != nullptr);
     service->discoverDetails(QLowEnergyService::FullDiscovery);
     QTRY_COMPARE(service->state(), QLowEnergyService::ServiceState::RemoteServiceDiscovered);
@@ -363,11 +566,11 @@ void tst_qlowenergycontroller_device::readDuringServiceDiscovery()
     QCOMPARE(writtenSpy.size(), 0);
 
     // Value that is initially set on the characteristic at the server-side (0x0b 0x00 ..)
-    QByteArray testArray(512, 0);
+    QByteArray testArray(largeAttributeSize, 0);
     testArray[0] = 0x0b;
 
     // We did a full service discovery and should have an initial value to compare
-    auto characteristic = service->characteristic(QBluetoothUuid(largeCharacteristicCharUuid));
+    auto characteristic = service->characteristic(QBluetoothUuid(largeAttributeCharUuid));
     QByteArray valueFromServiceDiscovery = characteristic.value();
     qDebug() << "Large characteristic value from service discovery:" << valueFromServiceDiscovery;
     // On darwin the server does not restart (disconnect) in-between the case runs
@@ -382,7 +585,7 @@ void tst_qlowenergycontroller_device::readDuringServiceDiscovery()
     QCOMPARE(characteristic.value(), valueFromServiceDiscovery);
 
     // Write a new value to the characteristic and read it back
-    for (int i = 0; i < 512; ++i) {
+    for (int i = 0; i < largeAttributeSize; ++i) {
         testArray[i] = i % 5;
     }
     service->writeCharacteristic(characteristic, testArray);

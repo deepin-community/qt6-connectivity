@@ -210,7 +210,7 @@ template<> quint8 servicesType<quint32>(bool dataComplete)
 {
     return dataComplete ? 0x5 : 0x4;
 }
-template<> quint8 servicesType<quint128>(bool dataComplete)
+template<> quint8 servicesType<QUuid::Id128Bytes>(bool dataComplete)
 {
     return dataComplete ? 0x7 : 0x6;
 }
@@ -236,7 +236,7 @@ static void addServicesData(AdvData &data, const QList<T> &services)
     data.data[data.length++] = 1 + maxServices * sizeofT;
     data.data[data.length++] = servicesType<T>(dataComplete);
     for (qsizetype i = 0; i < maxServices; ++i) {
-        putBtData(services.at(i), data.data + data.length);
+        memcpy(data.data + data.length, &services.at(i), sizeofT);
         data.length += sizeofT;
     }
 }
@@ -245,27 +245,23 @@ void QLeAdvertiserBluez::setServicesData(const QLowEnergyAdvertisingData &src, A
 {
     QList<quint16> services16;
     QList<quint32> services32;
-    QList<quint128> services128;
+    QList<QUuid::Id128Bytes> services128;
     const QList<QBluetoothUuid> services = src.services();
     for (const QBluetoothUuid &service : services) {
         bool ok;
         const quint16 service16 = service.toUInt16(&ok);
         if (ok) {
-            services16 << service16;
+            services16 << qToLittleEndian(service16);
             continue;
         }
         const quint32 service32 = service.toUInt32(&ok);
         if (ok) {
-            services32 << service32;
+            services32 << qToLittleEndian(service32);
             continue;
         }
 
-        // QBluetoothUuid::toUInt128() is always Big-Endian
-        // convert it to host order
-        quint128 hostOrder;
-        quint128 qtUuidOrder = service.toUInt128();
-        ntoh128(&qtUuidOrder, &hostOrder);
-        services128 << hostOrder;
+        // QUuid::toBytes() is defaults to Big-Endian
+        services128 << service.toBytes(QSysInfo::LittleEndian);
     }
     addServicesData(dest, services16);
     addServicesData(dest, services32);

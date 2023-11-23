@@ -86,11 +86,6 @@ struct capData {
 
 const int msecInADay = 1000*60*60*24;
 
-inline uint qHash(const QBluetoothAddress& address)
-{
-    return qHash(address.toUInt64());
-}
-
 static int sysCallCapGet(capHdr *header, capData *data)
 {
     return syscall(__NR_capget, header, data);

@@ -18,28 +18,26 @@
 
 #include <QtCore/QJniObject>
 
-#define QT_USE_ANDROIDNFC_NAMESPACE using namespace ::AndroidNfc;
-#define QT_BEGIN_ANDROIDNFC_NAMESPACE namespace AndroidNfc {
-#define QT_END_ANDROIDNFC_NAMESPACE }
+QT_BEGIN_NAMESPACE
 
-QT_BEGIN_ANDROIDNFC_NAMESPACE
+Q_DECLARE_JNI_CLASS(QtNfc, "org/qtproject/qt/android/nfc/QtNfc")
+Q_DECLARE_JNI_CLASS(QtNfcBroadcastReceiver, "org/qtproject/qt/android/nfc/QtNfcBroadcastReceiver")
 
-class AndroidNfcListenerInterface
-{
-public:
-    virtual ~AndroidNfcListenerInterface(){}
-    virtual void newIntent(QJniObject intent) = 0;
-};
+Q_DECLARE_JNI_TYPE(StringArray, "[Ljava/lang/String;")
+Q_DECLARE_JNI_TYPE(Intent, "Landroid/content/Intent;")
+Q_DECLARE_JNI_TYPE(Parcellable, "Landroid/os/Parcelable;")
 
+Q_DECLARE_JNI_CLASS(NdefMessage, "android/nfc/NdefMessage")
+
+namespace QtNfc {
 bool startDiscovery();
 bool stopDiscovery();
 QJniObject getStartIntent();
 bool isEnabled();
 bool isSupported();
-bool registerListener(AndroidNfcListenerInterface *listener);
-bool unregisterListener(AndroidNfcListenerInterface *listener);
 QJniObject getTag(const QJniObject &intent);
+} // namespace QtNfc
 
-QT_END_ANDROIDNFC_NAMESPACE
+QT_END_NAMESPACE
 
 #endif

@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 #####################################################################
 ## tst_qbluetoothaddress Test:
 #####################################################################
@@ -5,6 +8,6 @@
 qt_internal_add_test(tst_qbluetoothaddress
     SOURCES
         tst_qbluetoothaddress.cpp
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::Bluetooth
 )

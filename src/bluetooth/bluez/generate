@@ -10,12 +10,7 @@ process() {
 
     HEADER_FILE=${CPP_BASENAME}_p.h
     CPP_FILE=${CPP_BASENAME}.cpp
-    qdbusxml2cpp "$@" -i "$QGLOBAL_P_H" -p $HEADER_FILE:$CPP_FILE "$XML_FILE"
-
-    # until QTBUG-103313 is fixed:
-    MOC_FILE=moc_${CPP_BASENAME}_p.cpp
-    echo >> "$CPP_FILE"
-    echo "#include \"$MOC_FILE\"" >> "$CPP_FILE"
+    qdbusxml2cpp "$@" -I "$QGLOBAL_P_H" -p $HEADER_FILE:$CPP_FILE "$XML_FILE" --moc
 }
 
 #Bluez 5
@@ -32,3 +27,5 @@ process gattdesc1        org.bluez.GattDescriptor1.xml
 process gattservice1     org.bluez.GattService1.xml
 process battery1         org.bluez.Battery1.xml
 
+process gattmanager1     org.bluez.GattManager1.xml
+process leadvertisingmanager1 org.bluez.LEAdvertisingManager1.xml

@@ -1,13 +1,15 @@
 // Copyright (C) 2017 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
-#include "ui_chat.h"
-
 #include <QtWidgets/qdialog.h>
 
 #include <QtBluetooth/qbluetoothhostinfo.h>
 
-QT_USE_NAMESPACE
+QT_BEGIN_NAMESPACE
+namespace Ui {
+    class Chat;
+}
+QT_END_NAMESPACE
 
 class ChatServer;
 class ChatClient;
@@ -38,12 +40,14 @@ private slots:
 
     void newAdapterSelected();
 
+    void initBluetooth();
+
 private:
     int adapterFromUserSelection() const;
     int currentAdapterIndex = 0;
-    Ui_Chat *ui;
+    Ui::Chat *ui;
 
-    ChatServer *server;
+    ChatServer *server = nullptr;
     QList<ChatClient *> clients;
     QList<QBluetoothHostInfo> localAdapters;
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothservicediscoveryagent_p.h"
@@ -11,6 +11,7 @@
 #include "darwin/uistrings_p.h"
 
 #include <QtCore/qoperatingsystemversion.h>
+#include <QtCore/qcoreapplication.h>
 #include <QtCore/qloggingcategory.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qglobal.h>
@@ -26,7 +27,6 @@ QT_BEGIN_NAMESPACE
 namespace {
 
 using DarwinBluetooth::RetainPolicy;
-using ObjCServiceInquiry = QT_MANGLE_NAMESPACE(DarwinBTSDPInquiry);
 
 }
 
@@ -42,7 +42,7 @@ QBluetoothServiceDiscoveryAgentPrivate::QBluetoothServiceDiscoveryAgentPrivate(
 
 {
     Q_ASSERT(q_ptr);
-    serviceInquiry.reset([[ObjCServiceInquiry alloc] initWithDelegate:this], RetainPolicy::noInitialRetain);
+    serviceInquiry.reset([[DarwinBTSDPInquiry alloc] initWithDelegate:this], RetainPolicy::noInitialRetain);
 }
 
 QBluetoothServiceDiscoveryAgentPrivate::~QBluetoothServiceDiscoveryAgentPrivate()
@@ -77,7 +77,7 @@ void QBluetoothServiceDiscoveryAgentPrivate::start(const QBluetoothAddress &devi
         performMinimalServiceDiscovery(deviceAddress);
     } else {
         IOReturn result = kIOReturnSuccess;
-        auto nativeInquiry = serviceInquiry.getAs<ObjCServiceInquiry>();
+        auto nativeInquiry = serviceInquiry.getAs<DarwinBTSDPInquiry>();
         if (uuidFilter.size())
             result = [nativeInquiry performSDPQueryWithDevice:deviceAddress filters:uuidFilter];
         else
@@ -97,7 +97,7 @@ void QBluetoothServiceDiscoveryAgentPrivate::stop()
     discoveredDevices.clear();
 
     // "Stops" immediately.
-    [serviceInquiry.getAs<ObjCServiceInquiry>() stopSDPQuery];
+    [serviceInquiry.getAs<DarwinBTSDPInquiry>() stopSDPQuery];
 
     emit q_ptr->canceled();
 }

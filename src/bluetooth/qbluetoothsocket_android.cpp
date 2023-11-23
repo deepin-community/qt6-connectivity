@@ -21,9 +21,6 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
 
 #define USE_FALLBACK true
 
-// ### Needs to be moved to qjniobject.h in qtbase
-Q_DECLARE_METATYPE(QJniObject)
-
 Q_BLUETOOTH_EXPORT bool useReverseUuidWorkAroundConnect = true;
 
 /* BluetoothSocket.connect() can block up to 10s. Therefore it must be
@@ -239,7 +236,7 @@ void QBluetoothSocketPrivateAndroid::connectToServiceHelper(const QBluetoothAddr
 
     qCDebug(QT_BT_ANDROID) << "connectToServiceHelper()" << address.toString() << uuid.toString();
 
-    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+    if (!ensureAndroidPermission(QBluetoothPermission::Access)) {
         qCWarning(QT_BT_ANDROID) << "Bluetooth socket connect failed due to missing permissions";
         errorString = QBluetoothSocket::tr(
                 "Bluetooth socket connect failed due to missing permissions.");
@@ -546,7 +543,7 @@ void QBluetoothSocketPrivateAndroid::abort()
 
 QString QBluetoothSocketPrivateAndroid::localName() const
 {
-    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+    if (!ensureAndroidPermission(QBluetoothPermission::Access)) {
         qCWarning(QT_BT_ANDROID) << "Bluetooth socket localName() failed due to"
                                     "missing permissions";
     } else if (adapter.isValid()) {
@@ -560,7 +557,7 @@ QBluetoothAddress QBluetoothSocketPrivateAndroid::localAddress() const
 {
     QString result;
 
-    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+    if (!ensureAndroidPermission(QBluetoothPermission::Access)) {
         qCWarning(QT_BT_ANDROID) << "Bluetooth socket localAddress() failed due to"
                                     "missing permissions";
     } else if (adapter.isValid()) {
@@ -784,8 +781,8 @@ QBluetoothUuid QBluetoothSocketPrivateAndroid::reverseUuid(const QBluetoothUuid 
     if (isBaseUuid)
         return serviceUuid;
 
-    const quint128 original = serviceUuid.toUInt128();
-    quint128 reversed;
+    const QUuid::Id128Bytes original = serviceUuid.toBytes();
+    QUuid::Id128Bytes reversed;
     for (int i = 0; i < 16; i++)
         reversed.data[15-i] = original.data[i];
     return QBluetoothUuid{reversed};

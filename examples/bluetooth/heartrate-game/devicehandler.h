@@ -6,14 +6,14 @@
 
 #include "bluetoothbaseclass.h"
 
-#include <QLowEnergyController>
-#include <QLowEnergyService>
+#include <QtBluetooth/qlowenergycontroller.h>
+#include <QtBluetooth/qlowenergyservice.h>
 
-#include <qqml.h>
+#include <QtCore/qdatetime.h>
+#include <QtCore/qlist.h>
+#include <QtCore/qtimer.h>
 
-#include <QDateTime>
-#include <QList>
-#include <QTimer>
+#include <QtQml/qqmlregistration.h>
 
 class DeviceInfo;
 
@@ -31,8 +31,7 @@ class DeviceHandler : public BluetoothBaseClass
     Q_PROPERTY(float calories READ calories NOTIFY statsChanged)
     Q_PROPERTY(AddressType addressType READ addressType WRITE setAddressType)
 
-    QML_NAMED_ELEMENT(AddressType)
-    QML_UNCREATABLE("Enum is not a type")
+    QML_ELEMENT
 
 public:
     enum class AddressType {
@@ -78,7 +77,7 @@ private:
     void updateHeartRateValue(const QLowEnergyCharacteristic &c,
                               const QByteArray &value);
     void confirmedDescriptorWrite(const QLowEnergyDescriptor &d,
-                              const QByteArray &value);
+                                  const QByteArray &value);
 
     void updateDemoHR();
 

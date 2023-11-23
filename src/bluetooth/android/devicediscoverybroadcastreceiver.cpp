@@ -221,15 +221,6 @@ enum ADType {
     // .. more will be added when required
 };
 
-// Endianness conversion for quint128 doesn't exist in qtendian.h
-inline quint128 qbswap(const quint128 src)
-{
-    quint128 dst;
-    for (int i = 0; i < 16; i++)
-        dst.data[i] = src.data[15 - i];
-    return dst;
-}
-
 QBluetoothDeviceInfo::CoreConfigurations qtBtTypeForJavaBtType(jint javaType)
 {
     const JCachedBtTypes::iterator it = cachedBtTypes()->find(javaType);
@@ -500,7 +491,7 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
             case ADType128BitUuidIncomplete:
             case ADType128BitUuidComplete:
                 foundService =
-                    QBluetoothUuid(qToBigEndian<quint128>(qFromLittleEndian<quint128>(dataPtr)));
+                    QBluetoothUuid(qToBigEndian<QUuid::Id128Bytes>(qFromLittleEndian<QUuid::Id128Bytes>(dataPtr)));
                 break;
             case ADTypeServiceData16Bit:
                 if (nBytes >= 3) {
@@ -516,8 +507,8 @@ QBluetoothDeviceInfo DeviceDiscoveryBroadcastReceiver::retrieveDeviceInfo(const 
                 break;
             case ADTypeServiceData128Bit:
                 if (nBytes >= 17) {
-                    info.setServiceData(QBluetoothUuid(qToBigEndian<quint128>(
-                                                qFromLittleEndian<quint128>(dataPtr))),
+                    info.setServiceData(QBluetoothUuid(qToBigEndian<QUuid::Id128Bytes>(
+                                                qFromLittleEndian<QUuid::Id128Bytes>(dataPtr))),
                                         QByteArray(dataPtr + 16, nBytes - 17));
                 }
                 break;

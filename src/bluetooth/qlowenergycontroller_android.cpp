@@ -15,13 +15,9 @@
 #include <QtBluetooth/QLowEnergyAdvertisingParameters>
 #include <QtBluetooth/QLowEnergyConnectionParameters>
 
-
 QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
-
-// ### Needs to be moved to qjniobject.h in qtbase
-Q_DECLARE_METATYPE(QJniObject)
 
 // BT Core v5.3, 3.2.9, Vol 3, Part F
 const int BTLE_MAX_ATTRIBUTE_VALUE_SIZE = 512;
@@ -97,6 +93,8 @@ void QLowEnergyControllerPrivateAndroid::init()
                 this, &QLowEnergyControllerPrivateAndroid::characteristicChanged);
         connect(hub, &LowEnergyNotificationHub::serviceError,
                 this, &QLowEnergyControllerPrivateAndroid::serviceError);
+        connect(hub, &LowEnergyNotificationHub::remoteRssiRead,
+                this, &QLowEnergyControllerPrivateAndroid::remoteRssiRead);
     }
 }
 
@@ -107,7 +105,7 @@ void QLowEnergyControllerPrivateAndroid::connectToDevice()
         return;
     }
 
-    if (!ensureAndroidPermission(BluetoothPermission::Connect)) {
+    if (!ensureAndroidPermission(QBluetoothPermission::Access)) {
         // This is unlikely to happen as a valid local adapter is a precondition
         setError(QLowEnergyController::MissingPermissionsError);
         qCWarning(QT_BT_ANDROID) << "connectToDevice() failed due to missing permissions";
@@ -246,6 +244,8 @@ void QLowEnergyControllerPrivateAndroid::writeCharacteristic(
                             "writeCharacteristic",
                             service->androidService.object<QtJniTypes::BluetoothGattService>(),
                             charUuid.object<QtJniTypes::UUID>(), payload);
+                if (result)
+                    service->characteristicList[charHandle].value = newValue;
             }
         }
     }
@@ -291,6 +291,8 @@ void QLowEnergyControllerPrivateAndroid::writeDescriptor(
                           service->androidService.object<QtJniTypes::BluetoothGattService>(),
                           charUuid.object<QtJniTypes::UUID>(), descUuid.object<QtJniTypes::UUID>(),
                           payload);
+                if (result)
+                    service->characteristicList[charHandle].descriptorList[descHandle].value = newValue;
             }
         }
     }
@@ -364,6 +366,18 @@ void QLowEnergyControllerPrivateAndroid::mtuChanged(int mtu)
     emit q->mtuChanged(mtu);
 }
 
+void QLowEnergyControllerPrivateAndroid::remoteRssiRead(int rssi, bool success)
+{
+    Q_Q(QLowEnergyController);
+    if (success) {
+        // BT Core v5.3, 7.5.4, Vol 4, Part E
+        // The LE RSSI can take values -127..127 => narrowing to qint16 is safe
+        emit q->rssiRead(rssi);
+    } else {
+        qCDebug(QT_BT_ANDROID) << "Reading remote RSSI failed";
+        setError(QLowEnergyController::RssiReadError);
+    }
+}
 
 // called if server/peripheral
 void QLowEnergyControllerPrivateAndroid::peripheralConnectionUpdated(
@@ -957,8 +971,7 @@ void QLowEnergyControllerPrivateAndroid::startAdvertising(const QLowEnergyAdvert
 {
     setState(QLowEnergyController::AdvertisingState);
 
-    if (!(ensureAndroidPermission(BluetoothPermission::Advertise) &&
-          ensureAndroidPermission(BluetoothPermission::Connect))) {
+    if (!ensureAndroidPermission(QBluetoothPermission::Access | QBluetoothPermission::Advertise)) {
         qCWarning(QT_BT_ANDROID) << "startAdvertising() failed due to missing permissions";
         setError(QLowEnergyController::MissingPermissionsError);
         setState(QLowEnergyController::UnconnectedState);
@@ -1203,21 +1216,20 @@ void QLowEnergyControllerPrivateAndroid::addToGenericAttributeList(const QLowEne
         QJniEnvironment env;
         jbyteArray jb = env->NewByteArray(charData.value().size());
         env->SetByteArrayRegion(jb, 0, charData.value().size(), (jbyte*)charData.value().data());
-        jboolean success = javaChar.callMethod<jboolean>("setValue", jb);
+        jboolean success = javaChar.callMethod<jboolean>("setLocalValue", jb);
         if (!success)
             qCWarning(QT_BT_ANDROID) << "Cannot setup initial characteristic value for " << charData.uuid();
-
         env->DeleteLocalRef(jb);
 
         const QList<QLowEnergyDescriptorData> descriptorList = charData.descriptors();
         for (const auto &descData: descriptorList) {
-            QJniObject javaDesc = QJniObject::construct<QtJniTypes::BluetoothGattDescriptor>(
+            QJniObject javaDesc = QJniObject::construct<QtJniTypes::QtBtGattDescriptor>(
                                     javaUuidfromQtUuid(descData.uuid()).object<QtJniTypes::UUID>(),
                                     setupDescPermissions(descData));
 
             jb = env->NewByteArray(descData.value().size());
             env->SetByteArrayRegion(jb, 0, descData.value().size(), (jbyte*)descData.value().data());
-            success = javaDesc.callMethod<jboolean>("setValue", jb);
+            success = javaDesc.callMethod<jboolean>("setLocalValue", jb);
             if (!success) {
                 qCWarning(QT_BT_ANDROID) << "Cannot setup initial descriptor value for "
                                          << descData.uuid() << "(char" << charData.uuid()
@@ -1258,6 +1270,15 @@ int QLowEnergyControllerPrivateAndroid::mtu() const
         int result = hub->javaObject().callMethod<int>("mtu");
         qCDebug(QT_BT_ANDROID) << "MTU found to be" << result;
         return result;
+    }
+}
+
+void QLowEnergyControllerPrivateAndroid::readRssi()
+{
+    if (!hub || !hub->javaObject().callMethod<jboolean>("readRemoteRssi")) {
+        qCWarning(QT_BT_ANDROID) << "request to read RSSI failed";
+        setError(QLowEnergyController::RssiReadError);
+        return;
     }
 }
 

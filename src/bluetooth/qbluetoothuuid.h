@@ -12,12 +12,18 @@
 
 #include <QtCore/QDebug>
 
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+Q_FORWARD_DECLARE_OBJC_CLASS(CBUUID);
+#endif
+
 QT_BEGIN_NAMESPACE
 
+#if !defined(QT_SUPPORTS_INT128)
 struct quint128
 {
     quint8 data[16];
 };
+#endif
 
 class Q_BLUETOOTH_EXPORT QBluetoothUuid : public QUuid
 {
@@ -333,22 +339,32 @@ public:
 
     // values below are based on Bluetooth BASE_UUID
     constexpr QBluetoothUuid(ProtocolUuid uuid) noexcept
-        : QUuid(static_cast<uint>(uuid), 0x0, 0x1000, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb) {};
+        : QBluetoothUuid(static_cast<quint32>(uuid)) {};
     constexpr QBluetoothUuid(ServiceClassUuid uuid) noexcept
-        : QUuid(static_cast<uint>(uuid), 0x0, 0x1000, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb) {};
+        : QBluetoothUuid(static_cast<quint32>(uuid)) {};
     constexpr QBluetoothUuid(CharacteristicType uuid) noexcept
-        : QUuid(static_cast<uint>(uuid), 0x0, 0x1000, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb) {};
+        : QBluetoothUuid(static_cast<quint32>(uuid)) {};
     constexpr QBluetoothUuid(DescriptorType uuid) noexcept
-        : QUuid(static_cast<uint>(uuid), 0x0, 0x1000, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb) {};
+        : QBluetoothUuid(static_cast<quint32>(uuid)) {};
     explicit constexpr QBluetoothUuid(quint16 uuid) noexcept
-        : QUuid(uuid, 0x0, 0x1000, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb) {};
+        : QBluetoothUuid(quint32{uuid}) {};
     explicit constexpr QBluetoothUuid(quint32 uuid) noexcept
         : QUuid(uuid, 0x0, 0x1000, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb) {};
+    // end of bluetooth-specific constructors; rest is essentially `using QUuid::QUuid;`
 
+    using QUuid::QUuid;
+#if QT_BLUETOOTH_REMOVED_SINCE(6, 6)
     explicit QBluetoothUuid(quint128 uuid);
+#endif
+    QT6_ONLY(QT_POST_CXX17_API_IN_EXPORTED_CLASS) // quint128 changes based on QT_SUPPORTS_INT128!
+    explicit QBluetoothUuid(quint128 uuid, QSysInfo::Endian order = QSysInfo::BigEndian) noexcept
+        : QUuid{fromBytes(&uuid, order)} {}
+#if QT_BLUETOOTH_REMOVED_SINCE(6, 6) // actually 6.3 (cf. QUuid)
     explicit QBluetoothUuid(const QString &uuid);
+#endif
     QBluetoothUuid(const QBluetoothUuid &uuid) = default;
-    QBluetoothUuid(const QUuid &uuid);
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
+    QBluetoothUuid(QUuid QT6_ONLY(const &)uuid);
     ~QBluetoothUuid() = default;
 
     QBluetoothUuid &operator=(const QBluetoothUuid &other) = default;
@@ -358,27 +374,42 @@ public:
     }
     friend bool operator!=(const QBluetoothUuid &a, const QBluetoothUuid &b) { return !(a == b); }
 #ifndef QT_NO_DEBUG_STREAM
-    friend QDebug operator<<(QDebug debug, const QBluetoothUuid &uuid)
-    {
-        return streamingOperator(debug, uuid);
-    }
+    friend Q_BLUETOOTH_EXPORT QDebug operator<<(QDebug debug, const QBluetoothUuid &uuid);
+#if QT_BLUETOOTH_REMOVED_SINCE(6, 6)
     static QDebug streamingOperator(QDebug debug, const QBluetoothUuid &uuid);
+#endif
 #endif
 
     int minimumSize() const;
 
     quint16 toUInt16(bool *ok = nullptr) const;
     quint32 toUInt32(bool *ok = nullptr) const;
+
+#if QT_BLUETOOTH_REMOVED_SINCE(6, 6)
     quint128 toUInt128() const;
+#endif
+#if defined(Q_QDOC) || !defined(QT_SUPPORTS_INT128) // otherwise falls back to QUuid::toUint128()
+    quint128 toUInt128(QSysInfo::Endian order = QSysInfo::BigEndian) const noexcept;
+#endif
+
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+    static QBluetoothUuid fromCBUUID(CBUUID *cbUuid);
+    CBUUID *toCBUUID() const Q_DECL_NS_RETURNS_AUTORELEASED;
+#endif
 
     static QString serviceClassToString(ServiceClassUuid uuid);
     static QString protocolToString(ProtocolUuid uuid);
     static QString characteristicToString(CharacteristicType uuid);
     static QString descriptorToString(DescriptorType uuid);
-
-private:
-    static bool equals(const QBluetoothUuid &a, const QBluetoothUuid &b);
 };
+
+#if QT_BLUETOOTH_INLINE_IMPL_SINCE(6, 6)
+QBluetoothUuid::QBluetoothUuid(QUuid QT6_ONLY(const &)uuid)
+    : QUuid(uuid)
+{
+}
+#endif
+
 
 #ifndef QT_NO_DATASTREAM
 inline QDataStream &operator<<(QDataStream &s, const QBluetoothUuid &uuid)

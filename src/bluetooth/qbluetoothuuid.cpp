@@ -525,48 +525,52 @@ Q_CONSTRUCTOR_FUNCTION(registerQBluetoothUuid)
 */
 
 /*!
-    Constructs a new Bluetooth UUID from the 128 bit \a uuid.
+    \fn QBluetoothUuid::QBluetoothUuid(QUuid::Id128Bytes uuid, QSysInfo::Endian order)
+    \since 6.6
 
-    Note that \a uuid must be in big endian order.
+    Constructs a new Bluetooth UUID from the 128 bit \a uuid represented
+    by the integral \a uuid parameter and respecting the byte order \a order.
 */
-QBluetoothUuid::QBluetoothUuid(quint128 uuid)
-{
-QT_WARNING_PUSH
-QT_WARNING_DISABLE_GCC("-Wstrict-aliasing")
-    data1 = qFromBigEndian<quint32>(*reinterpret_cast<quint32 *>(&uuid.data[0]));
-    data2 = qFromBigEndian<quint16>(*reinterpret_cast<quint16 *>(&uuid.data[4]));
-    data3 = qFromBigEndian<quint16>(*reinterpret_cast<quint16 *>(&uuid.data[6]));
-QT_WARNING_POP
-
-    memcpy(data4, &uuid.data[8], 8);
-}
 
 /*!
-    Creates a QBluetoothUuid object from the string \a uuid,
-    which must be formatted as five hex fields separated by '-',
-    e.g., "{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}" where 'x' is a hex digit.
-    The curly braces shown here are optional, but it is normal to include them.
-    If the conversion fails, a null UUID is created. See \l QUuid::toString() for an
-    explanation of how the five hex fields map to the public data members in QUuid.
+    \fn quint128 QBluetoothUuid::toUInt128(QSysInfo::Endian order) const
+
+    Returns the 128 bit representation of this UUID in byte order \a order.
+
+    \note In Qt versions prior to 6.6, the \a order argument was not present,
+    and the function was hard-coded to return in big-endian order.
 */
-QBluetoothUuid::QBluetoothUuid(const QString &uuid)
-:   QUuid(uuid)
+#ifndef QT_SUPPORTS_INT128 // otherwise falls back to QUuid::toUint128()
+quint128 QBluetoothUuid::toUInt128(QSysInfo::Endian order) const noexcept
 {
+    quint128 r;
+    const auto bytes = toBytes(order);
+    static_assert(sizeof(quint128) == sizeof(decltype(bytes)));
+    memcpy(&r, bytes.data, sizeof(quint128));
+    return r;
 }
+#endif // !QT_SUPPORTS_INT128
 
 /*!
+    \fn QBluetoothUuid::QBluetoothUuid(quint128 uuid, QSysInfo::Endian order)
+
+     Constructs a new Bluetooth UUID from a 128 bit \a uuid.
+
+     \note In Qt versions prior to 6.6, the \a order argument was not present,
+     and the function was hard-coded to big-endian order.
+*/
+
+/*!
+    \fn QBluetoothUuid::QBluetoothUuid(const QUuid &uuid)
+
     Constructs a new Bluetooth UUID that is a copy of \a uuid.
 */
-QBluetoothUuid::QBluetoothUuid(const QUuid &uuid)
-:   QUuid(uuid)
-{
-}
 
 /*!
     Returns the minimum size in bytes that this UUID can be represented in.  For non-null UUIDs 2,
     4 or 16 is returned.  0 is returned for null UUIDs.
 
-    \sa isNull(), toUInt16(), toUInt32(), toUInt128()
+    \sa isNull(), toUInt16(), toUInt32()
 */
 int QBluetoothUuid::minimumSize() const
 {
@@ -625,27 +629,6 @@ quint32 QBluetoothUuid::toUInt32(bool *ok) const
         *ok = true;
 
     return data1;
-}
-
-/*!
-    Returns the 128 bit representation of this UUID.
-*/
-quint128 QBluetoothUuid::toUInt128() const
-{
-    quint128 uuid;
-
-    quint32 tmp32 = qToBigEndian<quint32>(data1);
-    memcpy(&uuid.data[0], &tmp32, 4);
-
-    quint16 tmp16 = qToBigEndian<quint16>(data2);
-    memcpy(&uuid.data[4], &tmp16, 2);
-
-    tmp16 = qToBigEndian<quint16>(data3);
-    memcpy(&uuid.data[6], &tmp16, 2);
-
-    memcpy(&uuid.data[8], data4, 8);
-
-    return uuid;
 }
 
 /*!
@@ -750,8 +733,6 @@ QString QBluetoothUuid::serviceClassToString(QBluetoothUuid::ServiceClassUuid uu
     //: Connection management (Bluetooth)
     case QBluetoothUuid::ServiceClassUuid::BondManagement: return QBluetoothServiceDiscoveryAgent::tr("Bond Management");
     case QBluetoothUuid::ServiceClassUuid::ContinuousGlucoseMonitoring: return QBluetoothServiceDiscoveryAgent::tr("Continuous Glucose Monitoring");
-    default:
-        break;
     }
 
     return QString();
@@ -794,8 +775,6 @@ QString QBluetoothUuid::protocolToString(QBluetoothUuid::ProtocolUuid uuid)
     case QBluetoothUuid::ProtocolUuid::McapControlChannel: return QBluetoothServiceDiscoveryAgent::tr("Multi-Channel Adaptation Protocol - Control");
     case QBluetoothUuid::ProtocolUuid::McapDataChannel: return QBluetoothServiceDiscoveryAgent::tr("Multi-Channel Adaptation Protocol - Data");
     case QBluetoothUuid::ProtocolUuid::L2cap: return QBluetoothServiceDiscoveryAgent::tr("Layer 2 Control Protocol");
-    default:
-        break;
     }
 
     return QString();
@@ -997,13 +976,13 @@ QString QBluetoothUuid::characteristicToString(CharacteristicType uuid)
     case QBluetoothUuid::CharacteristicType::BodyCompositionFeature: return QBluetoothServiceDiscoveryAgent::tr("Body Composition Feature");
     case QBluetoothUuid::CharacteristicType::BodyCompositionMeasurement: return QBluetoothServiceDiscoveryAgent::tr("Body Composition Measurement");
     case QBluetoothUuid::CharacteristicType::WeightMeasurement: return QBluetoothServiceDiscoveryAgent::tr("Weight Measurement");
+    case QBluetoothUuid::CharacteristicType::WeightScaleFeature:
+        return QBluetoothServiceDiscoveryAgent::tr("Weight Scale Feature");
     case QBluetoothUuid::CharacteristicType::UserControlPoint: return QBluetoothServiceDiscoveryAgent::tr("User Control Point");
     case QBluetoothUuid::CharacteristicType::MagneticFluxDensity2D: return QBluetoothServiceDiscoveryAgent::tr("Magnetic Flux Density 2D");
     case QBluetoothUuid::CharacteristicType::MagneticFluxDensity3D: return QBluetoothServiceDiscoveryAgent::tr("Magnetic Flux Density 3D");
     case QBluetoothUuid::CharacteristicType::Language: return QBluetoothServiceDiscoveryAgent::tr("Language");
     case QBluetoothUuid::CharacteristicType::BarometricPressureTrend: return QBluetoothServiceDiscoveryAgent::tr("Barometric Pressure Trend");
-    default:
-        break;
     }
 
     return QString();
@@ -1020,6 +999,8 @@ QString QBluetoothUuid::characteristicToString(CharacteristicType uuid)
 QString QBluetoothUuid::descriptorToString(QBluetoothUuid::DescriptorType uuid)
 {
     switch (uuid) {
+    case QBluetoothUuid::DescriptorType::UnknownDescriptorType:
+        break; // returns {} below
     case QBluetoothUuid::DescriptorType::CharacteristicExtendedProperties:
         return QBluetoothServiceDiscoveryAgent::tr("Characteristic Extended Properties");
     case QBluetoothUuid::DescriptorType::CharacteristicUserDescription:
@@ -1044,8 +1025,6 @@ QString QBluetoothUuid::descriptorToString(QBluetoothUuid::DescriptorType uuid)
         return QBluetoothServiceDiscoveryAgent::tr("Environmental Sensing Measurement");
     case QBluetoothUuid::DescriptorType::EnvironmentalSensingTriggerSetting:
         return QBluetoothServiceDiscoveryAgent::tr("Environmental Sensing Trigger Setting");
-    default:
-        break;
     }
 
     return QString();
@@ -1062,7 +1041,7 @@ QString QBluetoothUuid::descriptorToString(QBluetoothUuid::DescriptorType uuid)
 */
 
 #ifndef QT_NO_DEBUG_STREAM
-QDebug QBluetoothUuid::streamingOperator(QDebug debug, const QBluetoothUuid &uuid)
+QDebug operator<<(QDebug debug, const QBluetoothUuid &uuid)
 {
     debug << uuid.toString();
     return debug;

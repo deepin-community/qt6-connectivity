@@ -1,7 +1,8 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 cmake_minimum_required(VERSION 3.16)
 project(heartrate-server LANGUAGES CXX)
-
-set(CMAKE_AUTOMOC ON)
 
 if(NOT DEFINED INSTALL_EXAMPLESDIR)
     set(INSTALL_EXAMPLESDIR "examples")
@@ -11,7 +12,9 @@ set(INSTALL_EXAMPLEDIR "${INSTALL_EXAMPLESDIR}/bluetooth/heartrate-server")
 
 find_package(Qt6 REQUIRED COMPONENTS Bluetooth Core)
 
-if(ANDROID OR IOS)
+qt_standard_project_setup()
+
+if(ANDROID OR APPLE)
     find_package(Qt6 REQUIRED COMPONENTS Gui)
 endif()
 
@@ -23,25 +26,25 @@ set_target_properties(heartrate-server PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
-target_link_libraries(heartrate-server PUBLIC
+target_link_libraries(heartrate-server PRIVATE
     Qt::Bluetooth
     Qt::Core
 )
 
-if(ANDROID OR IOS)
-    target_link_libraries(heartrate-server PUBLIC
+if(ANDROID OR APPLE)
+    target_link_libraries(heartrate-server PRIVATE
         Qt::Gui
     )
 endif()
 
 if (APPLE)
+    # Using absolute path for shared plist files is a Ninja bug workaround
+    get_filename_component(SHARED_PLIST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../shared ABSOLUTE)
     if (IOS)
         set_target_properties(heartrate-server PROPERTIES
-            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+            MACOSX_BUNDLE_INFO_PLIST "${SHARED_PLIST_DIR}/Info.cmake.ios.plist"
         )
     else()
-        # Using absolute path for shared plist files is a Ninja bug workaround
-        get_filename_component(SHARED_PLIST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../shared ABSOLUTE)
         set_target_properties(heartrate-server PROPERTIES
             MACOSX_BUNDLE_INFO_PLIST "${SHARED_PLIST_DIR}/Info.cmake.macos.plist"
         )

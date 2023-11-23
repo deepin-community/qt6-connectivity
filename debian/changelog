@@ -1,3 +1,36 @@
+qt6-connectivity (6.6.0-3) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * Update symbols from buildlogs.
+
+ -- Patrick Franz <deltaone@debian.org>  Sat, 18 Nov 2023 10:21:46 +0100
+
+qt6-connectivity (6.6.0-2) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * Update symbols from buildlogs.
+
+ -- Patrick Franz <deltaone@debian.org>  Fri, 17 Nov 2023 22:34:31 +0100
+
+qt6-connectivity (6.6.0-1) experimental; urgency=medium
+
+  [ Patrick Franz ]
+  * New upstream release (6.6.0).
+  * Bump Qt B-Ds to 6.6.0.
+  * Add libpcsclite-dev as a build-dependency.
+  * Update list of installed files.
+  * Update symbols from buildlogs.
+
+ -- Patrick Franz <deltaone@debian.org>  Fri, 17 Nov 2023 01:12:45 +0100
+
+qt6-connectivity (6.4.2-5) unstable; urgency=medium
+
+  [ Pino Toscano ]
+  * Change the architecture of qt6-connectivity-examples to linux-any, as this
+    module is specific for Linux.
+
+ -- Patrick Franz <deltaone@debian.org>  Sat, 14 Oct 2023 20:22:01 +0200
+
 qt6-connectivity (6.4.2-4) unstable; urgency=medium
 
   * Team upload to unstable.

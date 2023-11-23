@@ -4,6 +4,7 @@
 /*!
     \example heartrate-game
     \title Bluetooth Low Energy Heart Rate Game
+    \examplecategory {Connectivity}
     \brief A game demonstrating the interaction with a Bluetooth Low Energy Heart Rate
     device/service.
 
@@ -29,16 +30,28 @@
     Bluetooth Low Energy device which might simulate the service. You can also use the
     \l {heartrate-server} {Heart Rate server} example for that purpose.
     If no such device is available, a demo mode is available which creates and displays
-    random values. This demo mode is enabled by passing --simulator on the
+    random values. This demo mode is enabled by passing \c{--simulator} on the
     command line.
 
     The goal of the game is to increase the measured heart rate as much as possible.
+
+    A detailed explanation of the APIs used in this example is given in the
+    \l {Using Qt Bluetooth Low Energy API} section of the Qt Bluetooth module
+    documentation.
 
     The \l {lowenergyscanner}{Bluetooth Low Energy Scanner} example might be more suitable
     if a heart rate device is not available. The scanner example works with any type of Bluetooth
     Low Energy peripheral device.
 
     \include examples-run.qdocinc
+
+    \section1 Checking Bluetooth Permissions
+
+    Before the application can start using Bluetooth, we have to check that
+    appropriate permissions were granted:
+
+    \snippet heartrate-game/devicefinder.cpp permissions
+
 
     \section1 Visual Tour
 

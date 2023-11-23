@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 #####################################################################
 ## tst_qlowenergycontroller Test:
 #####################################################################
@@ -5,7 +8,7 @@
 qt_internal_add_test(tst_qlowenergycontroller
     SOURCES
         tst_qlowenergycontroller.cpp
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::BluetoothPrivate
 )
 
@@ -13,12 +16,12 @@ qt_internal_add_test(tst_qlowenergycontroller
 #####################################################################
 
 qt_internal_extend_target(tst_qlowenergycontroller CONDITION ANDROID
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::Widgets
 )
 
 qt_internal_extend_target(tst_qlowenergycontroller CONDITION IOS OR MACOS
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::Widgets
 )
 

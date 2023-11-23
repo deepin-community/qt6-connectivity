@@ -7,6 +7,7 @@
 #include <QtBluetooth/qtbluetoothglobal.h>
 
 #include <QtCore/QByteArray>
+#include <QtCore/qhashfunctions.h>
 #include <QtCore/QString>
 #include <QtCore/QMetaType>
 #include <QtCore/QDebug>
@@ -19,14 +20,21 @@ public:
     constexpr QBluetoothAddress() noexcept {};
     constexpr explicit QBluetoothAddress(quint64 address) noexcept : m_address(address) {};
     explicit QBluetoothAddress(const QString &address);
-    QBluetoothAddress(const QBluetoothAddress &other);
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
+    QBluetoothAddress(const QBluetoothAddress &other) noexcept;
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
     ~QBluetoothAddress();
 
-    QBluetoothAddress &operator=(const QBluetoothAddress &other);
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
+    QBluetoothAddress &operator=(const QBluetoothAddress &other) noexcept;
+    QBluetoothAddress(QBluetoothAddress &&) noexcept = default;
+    QBluetoothAddress &operator=(QBluetoothAddress &&) noexcept = default;
 
-    bool isNull() const;
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
+    bool isNull() const noexcept;
 
-    void clear();
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
+    void clear() noexcept;
 
     friend bool operator<(const QBluetoothAddress &a, const QBluetoothAddress &b)
     {
@@ -41,11 +49,14 @@ public:
         return a.m_address != b.m_address;
     }
 
-    quint64 toUInt64() const;
+    QT_BLUETOOTH_INLINE_SINCE(6, 6)
+    quint64 toUInt64() const noexcept;
     QString toString() const;
 
 private:
     quint64 m_address = { 0 };
+    friend QT7_ONLY(constexpr) size_t qHash(const QBluetoothAddress &key, size_t seed = 0) noexcept
+    { return qHash(key.m_address, seed); }
 #ifndef QT_NO_DEBUG_STREAM
     friend QDebug operator<<(QDebug d, const QBluetoothAddress &a)
     {
@@ -54,6 +65,27 @@ private:
     static QDebug streamingOperator(QDebug, const QBluetoothAddress &address);
 #endif
 };
+
+#if QT_BLUETOOTH_INLINE_IMPL_SINCE(6, 6)
+QBluetoothAddress::QBluetoothAddress(const QBluetoothAddress &) noexcept = default;
+QBluetoothAddress &QBluetoothAddress::operator=(const QBluetoothAddress &) noexcept = default;
+QBluetoothAddress::~QBluetoothAddress() = default;
+
+void QBluetoothAddress::clear() noexcept
+{
+    m_address = 0;
+}
+
+bool QBluetoothAddress::isNull() const noexcept
+{
+    return m_address == 0;
+}
+
+quint64 QBluetoothAddress::toUInt64() const noexcept
+{
+    return m_address;
+}
+#endif // QT_BLUETOOTH_INLINE_IMPL_SINCE(6, 6)
 
 QT_END_NAMESPACE
 

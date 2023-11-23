@@ -1,4 +1,4 @@
-// Copyright (C) 2016 The Qt Company Ltd.
+// Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qbluetoothdevicediscoveryagent_p.h"
@@ -24,6 +24,8 @@
 #include "qbluetoothuuid.h"
 
 #include <QtCore/qloggingcategory.h>
+#include <QtCore/qcoreapplication.h>
+#include <QtCore/qpermissions.h>
 #include <QtCore/qvector.h>
 #include <QtCore/qglobal.h>
 #include <QtCore/qstring.h>
@@ -47,11 +49,6 @@ void registerQDeviceDiscoveryMetaType()
         initDone = true;
     }
 }
-#ifdef Q_OS_MACOS
-using InquiryObjC = QT_MANGLE_NAMESPACE(DarwinBTClassicDeviceInquiry);
-#endif // Q_OS_MACOS
-
-using LEInquiryObjC = QT_MANGLE_NAMESPACE(DarwinBTLEDeviceInquiry);
 
 } //namespace
 
@@ -78,7 +75,7 @@ QBluetoothDeviceDiscoveryAgentPrivate::~QBluetoothDeviceDiscoveryAgentPrivate()
         // We want the LE scan to stop as soon as possible.
         if (dispatch_queue_t leQueue = DarwinBluetooth::qt_LE_queue()) {
             // Local variable to be retained ...
-            LEInquiryObjC *inq = inquiryLE.getAs<LEInquiryObjC>();
+            DarwinBTLEDeviceInquiry *inq = inquiryLE.getAs<DarwinBTLEDeviceInquiry>();
             dispatch_sync(leQueue, ^{
                 [inq stop];
             });
@@ -139,17 +136,17 @@ void QBluetoothDeviceDiscoveryAgentPrivate::start(QBluetoothDeviceDiscoveryAgent
     // starting from Monterey.
 
     // No Classic on iOS, and Classic does not require a description on macOS:
-    if (methods.testFlag(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod)
-        && qt_appNeedsBluetoothUsageDescription()
-        && !qt_appPlistContainsDescription(bluetoothUsageKey)) {
-        // This would result in Bluetooth framework throwing an exception
-        // the moment we try to start device discovery.
-        qCWarning(QT_BT_DARWIN)
-                << "A proper Info.plist with NSBluetoothAlwaysUsageDescription "
-                   "entry is required, cannot start device discovery";
-        setError(QBluetoothDeviceDiscoveryAgent::MissingPermissionsError);
-        emit q_ptr->errorOccurred(lastError);
-        return;
+    if (methods.testFlag(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod)) {
+        const auto permissionStatus = qApp->checkPermission(QBluetoothPermission{});
+        if (permissionStatus != Qt::PermissionStatus::Granted) {
+            qCWarning(QT_BT_DARWIN,
+                      "Use of Bluetooth LE requires explicitly requested permissions.");
+            setError(QBluetoothDeviceDiscoveryAgent::MissingPermissionsError);
+            emit q_ptr->errorOccurred(lastError);
+            // Arguably, Classic scan is still possible, but let's keep the logic
+            // simple.
+            return;
+        }
     }
 
     requestedMethods = methods;
@@ -186,7 +183,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startClassic()
 
     if (!inquiry) {
         // The first Classic scan for this DDA.
-        inquiry.reset([[InquiryObjC alloc] initWithDelegate:this],
+        inquiry.reset([[DarwinBTClassicDeviceInquiry alloc] initWithDelegate:this],
                       DarwinBluetooth::RetainPolicy::noInitialRetain);
 
         if (!inquiry) {
@@ -200,7 +197,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startClassic()
 
     agentState = ClassicScan;
 
-    const IOReturn res = [inquiry.getAs<InquiryObjC>() start];
+    const IOReturn res = [inquiry.getAs<DarwinBTClassicDeviceInquiry>() start];
     if (res != kIOReturnSuccess) {
         setError(res, QCoreApplication::translate(DEV_DISCOVERY, DD_NOT_STARTED));
         agentState = NonActive;
@@ -231,7 +228,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startLE()
                       this, DeviceMemFunPtr(&QBluetoothDeviceDiscoveryAgentPrivate::deviceFound));
 
     // Check queue and create scanner:
-    inquiryLE.reset([[LEInquiryObjC alloc] initWithNotifier:notifier.get()],
+    inquiryLE.reset([[DarwinBTLEDeviceInquiry alloc] initWithNotifier:notifier.get()],
                     DarwinBluetooth::RetainPolicy::noInitialRetain);
     if (inquiryLE)
         notifier.release(); // Whatever happens next, inquiryLE is already the owner ...
@@ -248,7 +245,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startLE()
     // Now start in on LE queue:
     agentState = LEScan;
     // We need the local variable so that it's retained ...
-    LEInquiryObjC *inq = inquiryLE.getAs<LEInquiryObjC>();
+    DarwinBTLEDeviceInquiry *inq = inquiryLE.getAs<DarwinBTLEDeviceInquiry>();
     dispatch_async(leQueue, ^{
         [inq startWithTimeout:lowEnergySearchTimeout];
     });
@@ -270,7 +267,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::stop()
 
 #ifdef Q_OS_MACOS
     if (agentState == ClassicScan) {
-        const IOReturn res = [inquiry.getAs<InquiryObjC>() stop];
+        const IOReturn res = [inquiry.getAs<DarwinBTClassicDeviceInquiry>() stop];
         if (res != kIOReturnSuccess) {
             qCWarning(QT_BT_DARWIN) << "failed to stop";
             startPending = prevStart;
@@ -286,7 +283,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::stop()
         dispatch_queue_t leQueue(qt_LE_queue());
         Q_ASSERT(leQueue);
         // We need the local variable so that it's retained ...
-        LEInquiryObjC *inq = inquiryLE.getAs<LEInquiryObjC>();
+        DarwinBTLEDeviceInquiry *inq = inquiryLE.getAs<DarwinBTLEDeviceInquiry>();
         dispatch_sync(leQueue, ^{
             [inq stop];
         });
