@@ -1,5 +1,5 @@
 # Copyright (C) 2022 The Qt Company Ltd.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.16)
 project(annotatedurl LANGUAGES CXX)
@@ -33,10 +33,10 @@ if(IOS)
 endif()
 
 target_link_libraries(annotatedurl PRIVATE
-    Qt::Core
-    Qt::Gui
-    Qt::Nfc
-    Qt::Widgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Nfc
+    Qt6::Widgets
 )
 
 if(ANDROID)

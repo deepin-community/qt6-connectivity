@@ -1,5 +1,5 @@
 # Copyright (C) 2023 The Qt Company Ltd.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.16)
 project(heartrate-game LANGUAGES CXX)
@@ -25,11 +25,11 @@ set_target_properties(heartrate-game PROPERTIES
 )
 
 target_link_libraries(heartrate-game PRIVATE
-    Qt::Bluetooth
-    Qt::Core
-    Qt::Gui
-    Qt::Qml
-    Qt::Quick
+    Qt6::Bluetooth
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Qml
+    Qt6::Quick
 )
 
 set_source_files_properties(GameSettings.qml PROPERTIES
@@ -60,9 +60,14 @@ qt_add_qml_module(heartrate-game
         TitleBar.qml
         Main.qml
     RESOURCES
+        images/alert.svg
+        images/bluetooth.svg
         images/bt_off_to_on.png
+        images/clock.svg
         images/heart.png
         images/logo.png
+        images/progress.svg
+        images/search.svg
 )
 
 if (APPLE)

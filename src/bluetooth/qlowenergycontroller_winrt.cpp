@@ -14,8 +14,10 @@
 #include <QtCore/QLoggingCategory>
 #include <QtCore/private/qfunctions_winrt_p.h>
 #include <QtCore/QDeadlineTimer>
+#include <QtCore/qpointer.h>
 
 #include <functional>
+
 #include <robuffer.h>
 #include <windows.devices.enumeration.h>
 #include <windows.devices.bluetooth.h>
@@ -1229,6 +1231,10 @@ void QLowEnergyControllerPrivateWinRT::discoverServiceDetailsHelper(
     };
     //update service data
     QSharedPointer<QLowEnergyServicePrivate> pointer = serviceList.value(service);
+    if (!pointer) {
+        qCDebug(QT_BT_WINDOWS) << "Device was disconnected while doing service discovery";
+        return;
+    }
     qCDebug(QT_BT_WINDOWS_SERVICE_THREAD) << __FUNCTION__ << "Changing service pointer from thread"
                                           << QThread::currentThread();
     pointer->setState(QLowEnergyService::RemoteServiceDiscovering);

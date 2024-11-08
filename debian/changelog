@@ -1,3 +1,9 @@
+qt6-connectivity (6.8.0-0deepin) unstable; urgency=medium
+
+  * New upstream release (6.8.0).
+
+ -- lichenggang <lichenggang@deepin.org>  Fri, 08 Nov 2024 16:34:26 +0800
+
 qt6-connectivity (6.6.1-1) experimental; urgency=medium
 
   [ Patrick Franz ]

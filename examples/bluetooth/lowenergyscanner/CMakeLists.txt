@@ -1,5 +1,5 @@
 # Copyright (C) 2022 The Qt Company Ltd.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.16)
 project(lowenergyscanner LANGUAGES CXX)
@@ -24,10 +24,10 @@ set_target_properties(lowenergyscanner PROPERTIES
 )
 
 target_link_libraries(lowenergyscanner PUBLIC
-    Qt::Bluetooth
-    Qt::Core
-    Qt::Gui
-    Qt::Quick
+    Qt6::Bluetooth
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
 )
 
 if (APPLE)

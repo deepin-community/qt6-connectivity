@@ -3,13 +3,18 @@
 
 #include "chat.h"
 
-#include <QtCore/qloggingcategory.h>
-#include <QtWidgets/qapplication.h>
+#include <QLoggingCategory>
+
+#include <QApplication>
+
+using namespace Qt::StringLiterals;
 
 int main(int argc, char *argv[])
 {
     // QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
     QApplication app(argc, argv);
+
+    QIcon::setThemeName(u"btchat"_s);
 
     Chat d;
     QObject::connect(&d, &Chat::accepted, &app, &QApplication::quit);

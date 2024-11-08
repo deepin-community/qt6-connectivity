@@ -1,5 +1,5 @@
 # Copyright (C) 2022 The Qt Company Ltd.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.16)
 project(heartrate-server LANGUAGES CXX)
@@ -27,13 +27,13 @@ set_target_properties(heartrate-server PROPERTIES
 )
 
 target_link_libraries(heartrate-server PRIVATE
-    Qt::Bluetooth
-    Qt::Core
+    Qt6::Bluetooth
+    Qt6::Core
 )
 
 if(ANDROID OR APPLE)
     target_link_libraries(heartrate-server PRIVATE
-        Qt::Gui
+        Qt6::Gui
     )
 endif()
 
