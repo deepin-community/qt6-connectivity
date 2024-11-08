@@ -89,6 +89,10 @@ void QNearFieldTargetPrivateImpl::invalidate()
     sessionDelegate = nil;
 
     targetCheckTimer.stop();
+
+    QMetaObject::invokeMethod(this, [this]() {
+        Q_EMIT targetLost(this);
+    }, Qt::QueuedConnection);
 }
 
 QByteArray QNearFieldTargetPrivateImpl::uid() const
@@ -266,17 +270,20 @@ bool QNearFieldTargetPrivateImpl::connect()
         id<NFCTag> tag = static_cast<id<NFCTag>>(nfcTag.get());
         NFCTagReaderSession* session = tag.session;
         [session connectToTag: tag completionHandler: ^(NSError* error){
-            const bool success = error == nil;
-            QMetaObject::invokeMethod(this, [this, success] {
+            const int errorCode = error == nil ? -1 : error.code;
+            QMetaObject::invokeMethod(this, [this, errorCode] {
                 requestInProgress = QNearFieldTarget::RequestId();
-                if (success) {
+                if (errorCode == -1) {
                     connected = true;
                     onExecuteRequest();
                 } else {
                     const auto requestId = queue.dequeue().first;
+                    reportError(
+                        errorCode == NFCReaderError::NFCReaderErrorSecurityViolation
+                            ? QNearFieldTarget::UnsupportedTargetError
+                            : QNearFieldTarget::ConnectionError,
+                        requestId);
                     invalidate();
-                    Q_EMIT targetLost(this);
-                    reportError(QNearFieldTarget::ConnectionError, requestId);
                 }
             });
         }];
@@ -302,20 +309,16 @@ bool QNearFieldTargetPrivateImpl::isNdefTag() const
 
 void QNearFieldTargetPrivateImpl::onTargetCheck()
 {
-    if (!isAvailable()) {
+    if (!isAvailable())
         invalidate();
-        Q_EMIT targetLost(this);
-    }
 }
 
 void QNearFieldTargetPrivateImpl::onTargetError(QNearFieldTarget::Error error, const QNearFieldTarget::RequestId &id)
 {
     Q_UNUSED(id);
 
-    if (error == QNearFieldTarget::TimeoutError) {
+    if (error == QNearFieldTarget::TimeoutError)
         invalidate();
-        Q_EMIT targetLost(this);
-    }
 }
 
 namespace {
@@ -441,9 +444,8 @@ void  QNearFieldTargetPrivateImpl::onResponseReceived(QNearFieldTarget::RequestI
         setResponseForRequest(requestId, recvBuffer, true);
         onExecuteRequest();
     } else {
-        invalidate();
-        Q_EMIT targetLost(this);
         reportError(QNearFieldTarget::CommandError, requestId);
+        invalidate();
     }
 }
 

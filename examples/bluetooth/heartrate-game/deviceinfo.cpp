@@ -4,8 +4,8 @@
 #include "deviceinfo.h"
 #include "heartrate-global.h"
 
-#include <QtBluetooth/qbluetoothaddress.h>
-#include <QtBluetooth/qbluetoothuuid.h>
+#include <QBluetoothAddress>
+#include <QBluetoothUuid>
 
 using namespace Qt::StringLiterals;
 
@@ -22,7 +22,7 @@ QBluetoothDeviceInfo DeviceInfo::getDevice() const
 QString DeviceInfo::getName() const
 {
     if (simulator)
-        return u"Demo device"_s;
+        return u"Demo BT Device"_s;
     return m_device.name();
 }
 

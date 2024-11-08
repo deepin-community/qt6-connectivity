@@ -5,12 +5,14 @@
     \example heartrate-server
     \title Bluetooth Low Energy Heart Rate Server
     \examplecategory {Connectivity}
+    \meta tags {bluetooth, ble}
+
     \brief An example demonstrating how to set up and advertise a GATT service. The example
-    demonstrates the use of the Qt Bluetooth Low Energy classes related to peripheral (slave)
+    demonstrates the use of the \l{Qt Bluetooth} Low Energy classes related to peripheral (slave)
     functionality.
 
     The Bluetooth Low Energy Heart Rate Server is a command-line application that shows how to
-    develop a Bluetooth GATT server using the Qt Bluetooth API.
+    develop a Bluetooth GATT server using the \l{QtBluetooth}{Qt Bluetooth API}.
     The application covers setting up a service, advertising it and notifying clients about changes
     to characteristic values.
 
@@ -30,13 +32,6 @@
     The example implements a server application, which means it has no graphical user interface.
     To visualize what it is doing, you can use the \l {heartrate-game}{Heart Rate Game}
     example, which is basically the client-side counterpart to this application.
-
-    \note By default on Linux a kernel socket API is used for advertising, which
-    means that a privileged access is required to start advertising. This can
-    be achieved by running the example as root, for instance via \c sudo.
-    Starting from Qt 6.5, an alternative approach is to use the BlueZ D-Bus
-    backend for advertising, which does not require root access. To enable
-    this backend, set \c QT_BLUETOOTH_USE_DBUS_PERIPHERAL environment variable.
 
     \section1 Checking Bluetooth Permission
     Before the application can create a service and start advertising, we have to check

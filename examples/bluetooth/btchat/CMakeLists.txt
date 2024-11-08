@@ -1,5 +1,5 @@
 # Copyright (C) 2023 The Qt Company Ltd.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.16)
 project(btchat LANGUAGES CXX)
@@ -22,15 +22,27 @@ qt_add_executable(btchat
     remoteselector.cpp remoteselector.h remoteselector.ui
 )
 
+set(icon_files)
+foreach(icon IN ITEMS bluetooth bluetooth_dark send send_dark)
+    foreach(scale IN ITEMS "" "@2" "@3" "@4")
+        list(APPEND icon_files "icons/btchat/24x24${scale}/${icon}.png")
+    endforeach()
+endforeach()
+
+qt_add_resources(btchat "theme" FILES
+    ${icon_files}
+    icons/btchat/index.theme
+)
+
 set_target_properties(btchat PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
 )
 
 target_link_libraries(btchat PRIVATE
-    Qt::Bluetooth
-    Qt::Core
-    Qt::Widgets
+    Qt6::Bluetooth
+    Qt6::Core
+    Qt6::Widgets
 )
 
 if (APPLE)

@@ -13,11 +13,11 @@ Build-Depends: cmake (>= 3.24~),
                ninja-build,
                pkg-config,
                pkg-kde-tools,
-               qt6-base-dev (>= 6.6.1+dfsg~),
-               qt6-base-private-dev (>= 6.6.1+dfsg~),
-               qt6-declarative-dev (>= 6.6.1+dfsg~),
-Build-Depends-Indep: qt6-base-dev (>= 6.6~) <!nodoc>,
-                     qt6-documentation-tools (>= 6.6~) <!nodoc>,
+               qt6-base-dev (>= 6.8.0+dfsg~),
+               qt6-base-private-dev (>= 6.8.0+dfsg~),
+               qt6-declarative-dev (>= 6.8.0+dfsg~),
+Build-Depends-Indep: qt6-base-dev (>= 6.8~) <!nodoc>,
+                     qt6-documentation-tools (>= 6.8~) <!nodoc>,
 Standards-Version: 4.6.2
 Homepage: https://www.qt.io/developers/
 Vcs-Browser: https://salsa.debian.org/qt-kde-team/qt6/qt6-connectivity
