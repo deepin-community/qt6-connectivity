@@ -102,3 +102,5 @@ usr/lib/${DEB_HOST_MULTIARCH}/qt6/mkspecs/modules/qt_lib_bluetooth.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt6/mkspecs/modules/qt_lib_nfc.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt6/modules/Bluetooth.json
 usr/lib/${DEB_HOST_MULTIARCH}/qt6/modules/Nfc.json
+usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Bluetooth/Qt6BluetoothVersionlessAliasTargets.cmake
+usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt6Nfc/Qt6NfcVersionlessAliasTargets.cmake

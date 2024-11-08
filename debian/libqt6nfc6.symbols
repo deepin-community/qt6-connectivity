@@ -168,7 +168,6 @@ libQt6Nfc.so.6 libqt6nfc6 #MINVER#
  _ZNK25QNdefNfcSmartPosterRecord9hasActionEv@Qt_6 6.6.0
  _ZNK25QNdefNfcSmartPosterRecord9iconCountEv@Qt_6 6.6.0
  _ZNK25QNdefNfcSmartPosterRecord9uriRecordEv@Qt_6 6.6.0
- _ZSt19piecewise_construct@Qt_6 6.6.0
  _ZTI16QNearFieldTarget@Qt_6 6.6.0
  _ZTI17QNearFieldManager@Qt_6 6.6.0
  _ZTIZN9QMetaType17registerConverterI5QListI12QNdefMessageE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.6.0
