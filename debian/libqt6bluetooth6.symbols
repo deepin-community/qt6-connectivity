@@ -546,10 +546,6 @@ libQt6Bluetooth.so.6 libqt6bluetooth6 #MINVER#
  _ZTI30QBluetoothDeviceDiscoveryAgent@Qt_6 6.6.0
  _ZTI31QBluetoothServiceDiscoveryAgent@Qt_6 6.6.0
  (arch=armel riscv64)_ZTIN9__gnu_cxx7__mutexE@Qt_6 6.6.0
- (arch=armel riscv64)_ZTISt11_Mutex_baseILN9__gnu_cxx12_Lock_policyE1EE@Qt_6 6.6.0
-
- (arch=armel riscv64)_ZTISt16_Sp_counted_baseILN9__gnu_cxx12_Lock_policyE1EE@Qt_6 6.6.0
-
  (arch=armel armhf)_ZTISt19_Sp_make_shared_tag@Qt_6 6.6.0
  _ZTIZN9QMetaType17registerConverterI14QSharedPointerI24QLowEnergyServicePrivateEP7QObjectN9QtPrivate27QSmartPointerConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6_PRIVATE_API 6.6.0
  _ZTIZN9QMetaType17registerConverterI4QMapI15QDBusObjectPathS1_I7QStringS1_IS3_8QVariantEEE9QIterableI16QMetaAssociationEN9QtPrivate34QAssociativeIterableConvertFunctorIS7_EEEEbT1_EUlPKvPvE_@Qt_6 6.6.0
@@ -575,10 +571,6 @@ libQt6Bluetooth.so.6 libqt6bluetooth6 #MINVER#
  _ZTS30QBluetoothDeviceDiscoveryAgent@Qt_6 6.6.0
  _ZTS31QBluetoothServiceDiscoveryAgent@Qt_6 6.6.0
  (arch=armel riscv64)_ZTSN9__gnu_cxx7__mutexE@Qt_6 6.6.0
- (arch=armel riscv64)_ZTSSt11_Mutex_baseILN9__gnu_cxx12_Lock_policyE1EE@Qt_6 6.6.0
-
- (arch=armel riscv64)_ZTSSt16_Sp_counted_baseILN9__gnu_cxx12_Lock_policyE1EE@Qt_6 6.6.0
-
  _ZTSZN9QMetaType17registerConverterI14QSharedPointerI24QLowEnergyServicePrivateEP7QObjectN9QtPrivate27QSmartPointerConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6_PRIVATE_API 6.6.0
  _ZTSZN9QMetaType17registerConverterI4QMapI15QDBusObjectPathS1_I7QStringS1_IS3_8QVariantEEE9QIterableI16QMetaAssociationEN9QtPrivate34QAssociativeIterableConvertFunctorIS7_EEEEbT1_EUlPKvPvE_@Qt_6 6.6.0
  _ZTSZN9QMetaType17registerConverterI4QMapI7QString12QDBusVariantE9QIterableI16QMetaAssociationEN9QtPrivate34QAssociativeIterableConvertFunctorIS4_EEEEbT1_EUlPKvPvE_@Qt_6 6.6.0
