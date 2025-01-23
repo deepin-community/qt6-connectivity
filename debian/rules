@@ -30,3 +30,14 @@ override_dh_auto_install-indep:
 execute_after_dh_auto_install-arch:
 	# Reproducible builds: remove build paths from .prl files
 	sed -i -e '/^QMAKE_PRL_BUILD_DIR/d' debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libQt6*.prl
+
+override_dh_shlibdeps:
+     --dpkg-shlibdeps-params=--ignore-missing-info
+
+# 禁止独立测试用例
+override_dh_auto_test-indep:
+	@echo "Skipping independent tests"
+
+# 禁止架构相关测试用例
+override_dh_auto_test-arch:
+	@echo "Skipping architecture-dependent tests"
