@@ -1,3 +1,9 @@
+qt6-connectivity (6.8.0-0deepin3) unstable; urgency=medium
+
+  * fix QLowEnergyControllerPrivateBluez: guard against malformed replies
+
+ -- Tian ShiLin <tianshilin@uniontech.com>  Tue, 11 Feb 2025 15:39:07 +0800
+
 qt6-connectivity (6.8.0-0deepin2) unstable; urgency=medium
 
   * update symbols
