@@ -1,3 +1,9 @@
+qt6-connectivity (6.8.0-0deepin5) unstable; urgency=medium
+
+  * update symbols.
+
+ -- lichenggang <lichenggang@deepin.org>  Fri, 09 May 2025 14:34:59 +0800
+
 qt6-connectivity (6.8.0-0deepin4) unstable; urgency=medium
 
   * add depends libpcsclite-dev.
