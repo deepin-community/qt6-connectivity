@@ -1,3 +1,9 @@
+qt6-connectivity (6.8.0-0deepin4) unstable; urgency=medium
+
+  * add depends libpcsclite-dev.
+
+ -- lichenggang <lichenggang@deepin.org>  Fri, 09 May 2025 10:17:28 +0800
+
 qt6-connectivity (6.8.0-0deepin3) unstable; urgency=medium
 
   * fix QLowEnergyControllerPrivateBluez: guard against malformed replies

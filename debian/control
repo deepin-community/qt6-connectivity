@@ -66,6 +66,7 @@ Multi-Arch: same
 Depends: libqt6bluetooth6 (= ${binary:Version}),
          libqt6nfc6 (= ${binary:Version}),
          qt6-base-dev,
+	 libpcsclite-dev,
          ${misc:Depends},
 Description: Qt 6 Connectivity - development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
