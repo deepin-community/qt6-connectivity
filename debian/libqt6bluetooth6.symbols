@@ -378,7 +378,7 @@ libQt6Bluetooth.so.6 libqt6bluetooth6 #MINVER#
  _ZNK14QBluetoothUuid11minimumSizeEv@Qt_6 6.6.0
  _ZNK14QBluetoothUuid8toUInt16EPb@Qt_6 6.6.0
  _ZNK14QBluetoothUuid8toUInt32EPb@Qt_6 6.6.0
- (arch=!amd64 !arm64 !loong64 !ppc64 !ppc64el !riscv64 !s390x)_ZNK14QBluetoothUuid9toUInt128EN8QSysInfo6EndianE@Qt_6 6.6.0
+ (arch=!amd64 !arm64 !loong64 !ppc64 !ppc64el !riscv64 !s390x !mips64el !sw64)_ZNK14QBluetoothUuid9toUInt128EN8QSysInfo6EndianE@Qt_6 6.6.0
  _ZNK14QBluetoothUuid9toUInt128Ev@Qt_6 6.6.0
  _ZNK16QBluetoothServer10metaObjectEv@Qt_6 6.6.0
  _ZNK16QBluetoothServer10serverPortEv@Qt_6 6.6.0
