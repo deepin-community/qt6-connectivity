@@ -1,3 +1,9 @@
+qt6-connectivity (6.8.0-0deepin6) unstable; urgency=medium
+
+  * feat: add sw64 support.
+
+ -- hudeng <hudeng@deepin.org>  Wed, 04 Jun 2025 16:10:10 +0800
+
 qt6-connectivity (6.8.0-0deepin5) unstable; urgency=medium
 
   * update symbols.
