@@ -1,4 +1,4 @@
-# SymbolsHelper-Confirmed: 6.6.0 amd64 armel armhf hppa i386 powerpc sh4
+# SymbolsHelper-Confirmed: 6.6.0 amd64 armel armhf hppa i386 powerpc sh4 sw64
 libQt6Nfc.so.6 libqt6nfc6 #MINVER#
 * Build-Depends-Package: qt6-connectivity-dev
  NonQt@NonQt 6.8.0-0deepin4

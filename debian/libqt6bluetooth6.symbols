@@ -1,4 +1,4 @@
-# SymbolsHelper-Confirmed: 6.6.0 amd64 arm64 armel armhf hppa i386 loong64 powerpc ppc64 ppc64el riscv64 s390x sh4
+# SymbolsHelper-Confirmed: 6.6.0 amd64 arm64 armel armhf hppa i386 loong64 powerpc ppc64 ppc64el riscv64 s390x sh4 sw64
 libQt6Bluetooth.so.6 libqt6bluetooth6 #MINVER#
 * Build-Depends-Package: qt6-connectivity-dev
  Qt_6@Qt_6 6.6.0
