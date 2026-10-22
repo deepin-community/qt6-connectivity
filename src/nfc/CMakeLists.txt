@@ -16,8 +16,6 @@ qt_internal_add_module(Nfc
         qnearfieldmanager.cpp qnearfieldmanager.h qnearfieldmanager_p.h
         qnearfieldtarget.cpp qnearfieldtarget.h qnearfieldtarget_p.cpp qnearfieldtarget_p.h
         qtnfcglobal.h qtnfcglobal_p.h
-    DEFINES
-        QT_NO_CONTEXTLESS_CONNECT
     PUBLIC_LIBRARIES
         Qt::Core
 )
@@ -29,9 +27,7 @@ if(ANDROID AND (ANDROID AND NOT ANDROID_EMBEDDED))
     set_property(TARGET Nfc APPEND PROPERTY QT_ANDROID_BUNDLED_JAR_DEPENDENCIES
         jar/Qt${QtConnectivity_VERSION_MAJOR}AndroidNfc.jar
     )
-    set_property(TARGET Nfc APPEND PROPERTY QT_ANDROID_PERMISSIONS
-        android.permission.NFC
-    )
+    qt_internal_add_android_permission(Nfc NAME android.permission.NFC)
     set(NFC_BACKEND_AVAILABLE ON)
 endif()
 
@@ -67,6 +63,7 @@ qt_internal_extend_target(Nfc CONDITION IOS
     DEFINES
         IOS_NFC
     LIBRARIES
+        ${FWFoundation}
         ${FWCoreNFC}
         Qt::CorePrivate
 )
@@ -109,6 +106,7 @@ qt_internal_extend_target(Nfc CONDITION QT_FEATURE_neard
         neard/org.neard.Tag.xml
     DBUS_INTERFACE_FLAGS
         -i neard/neard_dbus_types_p.h
+        --namespace QtNfcPrivate
     DEFINES
         NEARD_NFC
     LIBRARIES

@@ -35,8 +35,6 @@ qt_internal_add_module(Bluetooth
         qlowenergyserviceprivate.cpp qlowenergyserviceprivate_p.h
         qprivatelinearbuffer_p.h
         qtbluetoothglobal.h qtbluetoothglobal_p.h
-    DEFINES
-        QT_NO_CONTEXTLESS_CONNECT
     LIBRARIES
         Qt::CorePrivate
         Qt::NetworkPrivate
@@ -75,7 +73,7 @@ if(QT_FEATURE_bluez)
             bluez/remotedevicemanager.cpp bluez/remotedevicemanager_p.h
             bluez/servicemap.cpp bluez/servicemap_p.h
             bluez/gattmanager1.cpp bluez/gattmanager1_p.h
-            bluez/leadvertisement1.cpp bluez/leadvertisement1_p.h
+            bluez/leadvertisement1adaptor.cpp bluez/leadvertisement1adaptor_p.h
             bluez/leadvertisingmanager1.cpp bluez/leadvertisingmanager1_p.h
             bluez/objectmanageradaptor.cpp bluez/objectmanageradaptor_p.h
             bluez/propertiesadaptor.cpp bluez/propertiesadaptor_p.h
@@ -126,16 +124,32 @@ elseif(ANDROID AND NOT ANDROID_EMBEDDED)
     set_property(TARGET Bluetooth APPEND PROPERTY QT_ANDROID_BUNDLED_JAR_DEPENDENCIES
         jar/Qt${QtConnectivity_VERSION_MAJOR}AndroidBluetooth.jar
     )
-    set_property(TARGET Bluetooth APPEND PROPERTY QT_ANDROID_PERMISSIONS
-        android.permission.ACCESS_FINE_LOCATION
-        android.permission.BLUETOOTH
-        android.permission.BLUETOOTH_ADMIN
-        # Android 12 / SDK 31+
-        android.permission.BLUETOOTH_SCAN
-        android.permission.BLUETOOTH_ADVERTISE
-        android.permission.BLUETOOTH_CONNECT
+    qt_internal_add_android_permission(Bluetooth
+        NAME android.permission.ACCESS_FINE_LOCATION
+        ATTRIBUTES maxSdkVersion 30
     )
-
+    qt_internal_add_android_permission(Bluetooth
+        NAME android.permission.BLUETOOTH
+        ATTRIBUTES maxSdkVersion 30
+    )
+    qt_internal_add_android_permission(Bluetooth
+        NAME android.permission.BLUETOOTH_ADMIN
+        ATTRIBUTES maxSdkVersion 30
+    )
+    qt_internal_add_android_permission(Bluetooth
+        NAME android.permission.BLUETOOTH_SCAN
+        ATTRIBUTES
+            minSdkVersion 31
+            usesPermissionFlags neverForLocation
+    )
+    qt_internal_add_android_permission(Bluetooth
+        NAME android.permission.BLUETOOTH_ADVERTISE
+        ATTRIBUTES minSdkVersion 31
+    )
+    qt_internal_add_android_permission(Bluetooth
+        NAME android.permission.BLUETOOTH_CONNECT
+        ATTRIBUTES minSdkVersion 31
+    )
     qt_internal_extend_target(Bluetooth
         SOURCES
             android/androidbroadcastreceiver.cpp android/androidbroadcastreceiver_p.h
@@ -239,6 +253,8 @@ elseif(QT_FEATURE_winrt_bt)
             qbluetoothdevicediscoveryagent_winrt.cpp
             qbluetoothdevicewatcher_winrt.cpp
             qbluetoothlocaldevice_winrt.cpp
+            qbluetoothservicediscoveryagent_winrt.cpp
+            qlowenergycontroller_winrt.cpp
         DEFINES
             QT_WINRT_BLUETOOTH
         LIBRARIES
@@ -249,6 +265,20 @@ elseif(QT_FEATURE_winrt_bt)
             user32
         PRIVATE_MODULE_INTERFACE
             Qt::CorePrivate
+    )
+elseif(OHOS)
+    qt_internal_extend_target(Bluetooth
+        SOURCES
+            dummy/dummy_helper.cpp dummy/dummy_helper_p.h
+            qbluetoothdevicediscoveryagent_p.cpp
+            qbluetoothlocaldevice_p.cpp
+            qbluetoothserver_p.cpp
+            qbluetoothservicediscoveryagent_p.cpp
+            qbluetoothserviceinfo_p.cpp
+            qbluetoothsocket_dummy.cpp qbluetoothsocket_dummy_p.h
+            qlowenergycontroller_dummy.cpp qlowenergycontroller_dummy_p.h
+        DEFINES
+            QT_OHOS_BLUETOOTH
     )
 else()
     qt_internal_extend_target(Bluetooth

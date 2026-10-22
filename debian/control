@@ -1,28 +1,27 @@
 Source: qt6-connectivity
 Section: libs
-Priority: optional
 Maintainer: Debian Qt/KDE Maintainers <debian-qt-kde@lists.debian.org>
-Uploaders: Patrick Franz <deltaone@debian.org>, Lu YaNing <dluyaning@gmail.com>,
-Build-Depends: cmake (>= 3.24~),
-               debhelper-compat (= 13),
+Uploaders: Patrick Franz <deltaone@debian.org>,
+Build-Depends: debhelper-compat (= 13),
+               dh-sequence-pkgkde-symbolshelper,
+               cmake (>= 3.24~),
                libbluetooth-dev [linux-any],
                libgl-dev,
                libpcsclite-dev,
                libssl-dev,
                libvulkan-dev [linux-any],
                ninja-build,
-               pkg-config,
                pkg-kde-tools,
-               qt6-base-dev (>= 6.8.0+dfsg~),
-               qt6-base-private-dev (>= 6.8.0+dfsg~),
-               qt6-declarative-dev (>= 6.8.0+dfsg~),
-Build-Depends-Indep: qt6-base-dev (>= 6.8~) <!nodoc>,
-                     qt6-documentation-tools (>= 6.8~) <!nodoc>,
-Standards-Version: 4.6.2
+               pkgconf,
+               qt6-base-dev (>= 6.11.2+dfsg~),
+               qt6-base-private-dev (>= 6.11.2+dfsg~),
+               qt6-declarative-dev (>= 6.11.2+dfsg~),
+Build-Depends-Indep: qt6-base-dev (>= 6.11~) <!nodoc>,
+                     qt6-documentation-tools (>= 6.11~) <!nodoc>,
+Standards-Version: 4.7.4
 Homepage: https://www.qt.io/developers/
 Vcs-Browser: https://salsa.debian.org/qt-kde-team/qt6/qt6-connectivity
 Vcs-Git: https://salsa.debian.org/qt-kde-team/qt6/qt6-connectivity.git
-Rules-Requires-Root: no
 
 Package: libqt6bluetooth6
 Architecture: linux-any
@@ -52,7 +51,7 @@ Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends},
 Depends: ${misc:Depends}, ${shlibs:Depends},
-Recommends: neard,
+Suggests: neard,
 Description: Qt 6 Connectivity NFC library
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
@@ -66,7 +65,6 @@ Multi-Arch: same
 Depends: libqt6bluetooth6 (= ${binary:Version}),
          libqt6nfc6 (= ${binary:Version}),
          qt6-base-dev,
-	 libpcsclite-dev,
          ${misc:Depends},
 Description: Qt 6 Connectivity - development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
@@ -76,6 +74,7 @@ Description: Qt 6 Connectivity - development files
  applications using Qt 6 Connectivity libraries.
 
 Package: qt6-connectivity-doc
+Build-Profiles: <!nodoc>
 Architecture: all
 Section: doc
 Depends: qt6-base-doc, ${misc:Depends},
@@ -87,6 +86,7 @@ Description: Qt 6 connectivity documentation
  This package contains the documentation for the Qt 6 connectivity.
 
 Package: qt6-connectivity-doc-html
+Build-Profiles: <!nodoc>
 Architecture: all
 Section: doc
 Depends: qt6-base-doc-html, ${misc:Depends},

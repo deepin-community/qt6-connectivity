@@ -18,6 +18,8 @@ QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
+using namespace QtBluetoothPrivate; // for D-Bus wrappers
+
 QLowEnergyControllerPrivateBluezDBus::QLowEnergyControllerPrivateBluezDBus(
         const QString &adapterPathWithPeripheralSupport)
     : QLowEnergyControllerPrivate(),
@@ -126,7 +128,8 @@ void QLowEnergyControllerPrivateBluezDBus::devicePropertiesChanged(
             for (const QString &uuidString : newUuidStringList)
                 newUuidList.append(QBluetoothUuid(uuidString));
 
-            for (const QBluetoothUuid &uuid : serviceList.keys()) {
+            const auto serviceKeys = serviceList.keys();
+            for (const QBluetoothUuid &uuid : serviceKeys) {
                 if (!newUuidList.contains(uuid)) {
                     qCDebug(QT_BT_BLUEZ) << __func__ << "Service" << uuid << "has been removed";
                     QSharedPointer<QLowEnergyServicePrivate> service = serviceList.take(uuid);
@@ -500,8 +503,9 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServices()
                     batteryServicePath = it.key().path();
                     break;
                 } else if (iface == QStringLiteral("org.bluez.Device1")) {
-                    for (auto const& uuid :
-                         battIter.value()[QStringLiteral("UUIDs")].toStringList()) {
+                    const auto batteryUuids =
+                            battIter.value()[QStringLiteral("UUIDs")].toStringList();
+                    for (auto const &uuid : batteryUuids) {
                         if (QBluetoothUuid(uuid) ==
                                 QBluetoothUuid::ServiceClassUuid::BatteryService) {
                             qCDebug(QT_BT_BLUEZ) << "Battery service listed as available service";
@@ -644,7 +648,6 @@ void QLowEnergyControllerPrivateBluezDBus::discoverServiceDetails(
         return;
     }
 
-    QStringList descriptorPaths;
     const ManagedObjectList managedObjectList = reply.value();
     for (ManagedObjectList::const_iterator it = managedObjectList.constBegin(); it != managedObjectList.constEnd(); ++it) {
         const InterfaceList &ifaceList = it.value();
@@ -1491,7 +1494,7 @@ void QLowEnergyControllerPrivateBluezDBus::handlePeripheralConnectivityChanged(b
 void QLowEnergyControllerPrivateBluezDBus::requestConnectionUpdate(
                     const QLowEnergyConnectionParameters & /* params */)
 {
-    qCWarning(QT_BT_BLUEZ) << "Connection udpate requests not supported on Bluez DBus";
+    qCWarning(QT_BT_BLUEZ) << "Connection update requests not supported on Bluez DBus";
 }
 
 void QLowEnergyControllerPrivateBluezDBus::addToGenericAttributeList(

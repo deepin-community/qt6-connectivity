@@ -60,8 +60,8 @@ Q_DECLARE_LOGGING_CATEGORY(QT_BT)
 
     \note On macOS Monterey (12) the socket data flow is paused when a
     modal dialogue is executing, or an event tracking mode is entered (for
-    example by long-pressing a Window close button). This may change in the
-    future releases of macOS.
+    example by long-pressing a Window close button). This issue has been
+    fixed in macOS Sequoia (15).
 */
 
 /*!
@@ -466,7 +466,10 @@ QString QBluetoothSocket::errorString() const
     Therefore it is required to reconnect to change this parameter for an
     existing connection.
 
-    On Bluez this property is set to QBluetooth::Security::Authorization by default.
+    \include qbluetoothserver.cpp bluetooth_security_bluez
+
+    On Linux with the BlueZ D-Bus backend and on Windows, this flag is not
+    supported and ignored.
 
     On \macos, this value is ignored as the platform does not permit access
     to the security parameter of the socket. By default the platform prefers
@@ -620,6 +623,7 @@ void QBluetoothSocket::doDeviceDiscovery(const QBluetoothServiceInfo &service, O
     d->discoveryAgent->start(QBluetoothServiceDiscoveryAgent::FullDiscovery);
 }
 
+/*! \internal */
 void QBluetoothSocket::serviceDiscovered(const QBluetoothServiceInfo &service)
 {
     Q_D(QBluetoothSocketBase);
@@ -640,6 +644,7 @@ void QBluetoothSocket::serviceDiscovered(const QBluetoothServiceInfo &service)
     }
 }
 
+/*! \internal */
 void QBluetoothSocket::discoveryFinished()
 {
     qCDebug(QT_BT) << "Socket discovery finished";

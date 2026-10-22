@@ -4,12 +4,14 @@
 
 #include <QDBusMetaType>
 #include "neard_helper_p.h"
-#include "objectmanager_interface.h"
+#include "objectmanager_interface_p.h"
 
 QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_NFC_NEARD)
 Q_GLOBAL_STATIC(NeardHelper, neardHelper)
+
+using namespace QtNfcPrivate; // for D-Bus wrappers
 
 NeardHelper::NeardHelper(QObject *parent) :
     QObject(parent)

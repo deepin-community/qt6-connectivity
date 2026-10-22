@@ -8,6 +8,7 @@
 #include "qbluetoothdevicediscoveryagent_p.h"
 #include <QCoreApplication>
 #include <QtCore/QLoggingCategory>
+#include <QtCore/qpermissions.h>
 #include <QtBluetooth/QBluetoothAddress>
 #include <QtBluetooth/QBluetoothDeviceInfo>
 #include <QtCore/QJniEnvironment>
@@ -45,7 +46,7 @@ QBluetoothDeviceDiscoveryAgentPrivate::~QBluetoothDeviceDiscoveryAgentPrivate()
         stop();
 
     if (leScanner.isValid())
-        leScanner.setField<jlong>("qtObject", reinterpret_cast<jlong>(nullptr));
+        leScanner.setField("qtObject", reinterpret_cast<jlong>(nullptr));
 
     if (receiver) {
         receiver->unregisterReceiver();
@@ -144,41 +145,65 @@ void QBluetoothDeviceDiscoveryAgentPrivate::start(QBluetoothDeviceDiscoveryAgent
     }
     qCDebug(QT_BT_ANDROID) << "QBluetoothPermission::Access permission available";
 
-    // Double check Location service is turned on
-    bool locationTurnedOn = true; // backwards compatible behavior to previous Qt versions
-    const  QJniObject locString = QJniObject::getStaticObjectField(
-                "android/content/Context", "LOCATION_SERVICE", "Ljava/lang/String;");
+    const bool scanNeedsLocation = (bool)QtJniTypes::QtBtUtility::callStaticMethod<jboolean>(
+            "bluetoothScanRequiresLocation", QNativeInterface::QAndroidApplication::context());
 
-    const QJniObject locService =
+    qCDebug(QT_BT_ANDROID) << "Is location service and location permission required for scan:"
+                           << scanNeedsLocation;
+
+    if (scanNeedsLocation) {
+        // Double check we have location permission. With API-level < 31 it is already
+        // guaranteed by the ensureAndroidPermission() above, but with API-level 31+ it is
+        // required additionally if 'neverForLocation' assertion isn't set.
+        QLocationPermission locationPermission;
+        locationPermission.setAccuracy(QLocationPermission::Accuracy::Precise);
+
+        if (qApp->checkPermission(locationPermission) != Qt::PermissionStatus::Granted) {
+            qCWarning(QT_BT_ANDROID) << "Search not possible due to missing location permissions";
+            lastError = QBluetoothDeviceDiscoveryAgent::LocationServiceTurnedOffError;
+            errorString = QBluetoothDeviceDiscoveryAgent::tr("Location permission not granted. Search is not possible.");
+            emit q->errorOccurred(lastError);
+            return;
+        }
+
+        qCDebug(QT_BT_ANDROID) << "Location permission granted";
+
+        // Double check Location service is turned on
+        bool locationTurnedOn = true; // backwards compatible behavior to previous Qt versions
+        const  QJniObject locString = QJniObject::getStaticObjectField(
+            "android/content/Context", "LOCATION_SERVICE", "Ljava/lang/String;");
+
+        const QJniObject locService =
             QJniObject(QNativeInterface::QAndroidApplication::context()).callMethod<jobject>(
                 "getSystemService",
                 locString.object<jstring>());
 
-    if (locService.isValid()) {
-        if (QNativeInterface::QAndroidApplication::sdkVersion() >= 28) {
-            locationTurnedOn = bool(locService.callMethod<jboolean>("isLocationEnabled"));
-        } else {
-            // check whether there is any enabled provider
-            QJniObject listOfEnabledProviders =
+        if (locService.isValid()) {
+            if (QNativeInterface::QAndroidApplication::sdkVersion() >= 28) {
+                locationTurnedOn = bool(locService.callMethod<jboolean>("isLocationEnabled"));
+            } else {
+                // check whether there is any enabled provider
+                QJniObject listOfEnabledProviders =
                     locService.callMethod<QtJniTypes::List>("getProviders", true);
 
-            if (listOfEnabledProviders.isValid()) {
-                int size = listOfEnabledProviders.callMethod<jint>("size");
-                locationTurnedOn = size > 0;
-                qCDebug(QT_BT_ANDROID) << size << "enabled location providers detected.";
+                if (listOfEnabledProviders.isValid()) {
+                    int size = listOfEnabledProviders.callMethod<jint>("size");
+                    locationTurnedOn = size > 0;
+                    qCDebug(QT_BT_ANDROID) << size << "enabled location providers detected.";
+                }
             }
         }
-    }
 
-    if (!locationTurnedOn) {
-        qCWarning(QT_BT_ANDROID) << "Search not possible due to turned off Location service";
-        lastError = QBluetoothDeviceDiscoveryAgent::LocationServiceTurnedOffError;
-        errorString = QBluetoothDeviceDiscoveryAgent::tr("Location service turned off. Search is not possible.");
-        emit q->errorOccurred(lastError);
-        return;
-    }
+        if (!locationTurnedOn) {
+            qCWarning(QT_BT_ANDROID) << "Search not possible due to turned off Location service";
+            lastError = QBluetoothDeviceDiscoveryAgent::LocationServiceTurnedOffError;
+            errorString = QBluetoothDeviceDiscoveryAgent::tr("Location service turned off. Search is not possible.");
+            emit q->errorOccurred(lastError);
+            return;
+        }
 
-    qCDebug(QT_BT_ANDROID) << "Location turned on";
+        qCDebug(QT_BT_ANDROID) << "Location turned on";
+    }
 
     // install Java BroadcastReceiver
     if (!receiver) {
@@ -288,6 +313,11 @@ void QBluetoothDeviceDiscoveryAgentPrivate::stop()
             return;
         }
     } else if (m_active == BtleScanActive) {
+        if (pendingCancel)
+            return;
+        pendingCancel = true;
+        if (leScanTimeout->isActive())
+            leScanTimeout->stop();
         stopLowEnergyScan();
     }
 }
@@ -403,6 +433,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startLowEnergyScan()
     Q_Q(QBluetoothDeviceDiscoveryAgent);
 
     m_active = BtleScanActive;
+    ++leScanEpoch;
 
     if (!leScanner.isValid()) {
         leScanner = QJniObject::construct<QtJniTypes::QtBtLECentral>(
@@ -414,7 +445,7 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startLowEnergyScan()
             return;
         }
 
-        leScanner.setField<jlong>("qtObject", reinterpret_cast<long>(receiver));
+        leScanner.setField("qtObject", reinterpret_cast<jlong>(receiver));
     }
 
     jboolean result = leScanner.callMethod<jboolean>("scanForLeDevice", true);
@@ -442,22 +473,38 @@ void QBluetoothDeviceDiscoveryAgentPrivate::startLowEnergyScan()
         << "QBluetoothDeviceDiscoveryAgentPrivate::start() - Low Energy search successfully started.";
 }
 
+void QBluetoothDeviceDiscoveryAgentPrivate::processLeDiscoveryFinished(int epoch)
+{
+    // Drop stale or duplicate invocations.
+    if (epoch != leScanEpoch || m_active != BtleScanActive)
+        return;
+
+    m_active = NoScanActive;
+
+    // Same three-way branch as processSdpDiscoveryFinished().
+    Q_Q(QBluetoothDeviceDiscoveryAgent);
+    if (pendingCancel && !pendingStart) {
+        pendingCancel = false;
+        emit q->canceled();
+    } else if (pendingStart) {
+        pendingStart = pendingCancel = false;
+        start(requestedMethods);
+    } else {
+        // timeout -> regular stop
+        emit q->finished();
+    }
+}
+
 void QBluetoothDeviceDiscoveryAgentPrivate::stopLowEnergyScan()
 {
     jboolean result = leScanner.callMethod<jboolean>("scanForLeDevice", false);
     if (!result)
         qCWarning(QT_BT_ANDROID) << "Cannot stop BTLE device scanner";
 
-    m_active = NoScanActive;
-
-    Q_Q(QBluetoothDeviceDiscoveryAgent);
-    if (leScanTimeout->isActive()) {
-        // still active if this function was called from stop()
-        leScanTimeout->stop();
-        emit q->canceled();
-    } else {
-        // timeout -> regular stop
-        emit q->finished();
-    }
+    // Defer so a follow-up start() can set pendingStart; the captured epoch
+    // skips this handler if a fresh scan starts first.
+    QMetaObject::invokeMethod(this,
+            [this, epoch = leScanEpoch]() { processLeDiscoveryFinished(epoch); },
+            Qt::QueuedConnection);
 }
 QT_END_NAMESPACE

@@ -11,6 +11,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.nfc.NfcAdapter;
+import android.nfc.Tag;
 import android.content.IntentFilter.MalformedMimeTypeException;
 import android.os.Build;
 import android.os.Parcelable;
@@ -22,12 +23,10 @@ class QtNfc
     static private final String TAG = "QtNfc";
     static private NfcAdapter m_adapter = null;
     static private PendingIntent m_pendingIntent = null;
-    static private Context m_context = null;
     static private Activity m_activity = null;
 
     static void setContext(Context context)
     {
-        m_context = context;
         if (context instanceof Activity) m_activity = (Activity) context;
         m_adapter = NfcAdapter.getDefaultAdapter(context);
 
@@ -140,8 +139,12 @@ class QtNfc
         }
     }
 
+    @SuppressWarnings("deprecation")
     static Parcelable getTag(Intent intent)
     {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            return intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag.class);
+
         return intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
     }
 }

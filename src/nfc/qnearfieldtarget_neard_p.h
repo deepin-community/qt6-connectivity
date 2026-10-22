@@ -24,9 +24,9 @@
 #include <qndefmessage.h>
 
 #include "neard/neard_helper_p.h"
-#include "properties_interface.h"
-#include "objectmanager_interface.h"
-#include "tag_interface.h"
+#include "properties_interface_p.h"
+#include "objectmanager_interface_p.h"
+#include "tag_interface_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -58,11 +58,12 @@ private:
     void handleWriteRequest();
 
     QDBusObjectPath m_tagPath;
-    OrgFreedesktopDBusPropertiesInterface *m_dbusProperties;
+    QtNfcPrivate::OrgFreedesktopDBusPropertiesInterface *m_dbusProperties;
     QList<QDBusObjectPath> m_recordPaths;
     QTimer m_recordPathsCollectedTimer;
     QTimer m_readErrorTimer;
     QTimer m_delayedWriteTimer;
+    QByteArray m_uid;
     QNearFieldTarget::Type m_type;
     bool m_readRequested;
     QNearFieldTarget::RequestId m_currentReadRequestId;

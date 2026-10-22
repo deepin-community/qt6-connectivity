@@ -73,16 +73,16 @@ static ServiceData extractServiceData(const BluetoothLEAdvertisement &ad)
             if (dataType == 0x16) {
                 Q_ASSERT(bufferData.size() >= 2);
                 ret.insert(QBluetoothUuid(qFromLittleEndian<quint16>(bufferData.constData())),
-                           bufferData + 2);
+                           bufferData.right(bufferData.length() - 2));
             } else if (dataType == 0x20) {
                 Q_ASSERT(bufferData.size() >= 4);
                 ret.insert(QBluetoothUuid(qFromLittleEndian<quint32>(bufferData.constData())),
-                           bufferData + 4);
+                           bufferData.right(bufferData.length() - 4));
             } else if (dataType == 0x21) {
                 Q_ASSERT(bufferData.size() >= 16);
                 ret.insert(QBluetoothUuid(qToBigEndian<QUuid::Id128Bytes>(
                                    qFromLittleEndian<QUuid::Id128Bytes>(bufferData.constData()))),
-                           bufferData + 16);
+                           bufferData.right(bufferData.length() - 16));
             }
         }
     }
@@ -213,7 +213,8 @@ private:
     void getClassicDeviceFromId(const winrt::hstring &id);
     void handleClassicDevice(const BluetoothDevice &device);
     void handleRfcommServices(const RfcommDeviceServicesResult &servicesResult,
-                              uint64_t address, const QString &name, uint32_t classOfDeviceInt);
+                              uint64_t address, const QString &name, uint32_t classOfDeviceInt,
+                              bool isCached);
 
     // Bluetooth Low Energy handlers
     void getLowEnergyDeviceFromId(const winrt::hstring &id);
@@ -538,14 +539,29 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleClassicDevice(const BluetoothDe
     const std::wstring name { device.Name() }; // via operator std::wstring_view()
     const QString btName = QString::fromStdWString(name);
     const uint32_t deviceClass = device.ClassOfDevice().RawValue();
+
+    // Use IsPaired() to determine if the device is cached or not.
+    // That is because Windows will always report paired devices, even if
+    // they are not physically available. This is a sub-optimal approach,
+    // but looks like we cannot do better...
+    const auto deviceInfo = SAFE(device.DeviceInformation());
+    if (!deviceInfo) {
+        qCDebug(QT_BT_WINDOWS) << "Failed to obtain DeviceInformation for Classic device";
+        invokeDecrementPendingDevicesCountAndCheckFinished(shared_from_this());
+        return;
+    }
+    const bool isCached = SAFE(deviceInfo.Pairing().IsPaired());
+
     auto thisPtr = shared_from_this();
     auto asyncOp = device.GetRfcommServicesAsync();
-    asyncOp.Completed([thisPtr, address, btName, deviceClass](auto &&op, AsyncStatus status) {
+    asyncOp.Completed([thisPtr, address, btName, deviceClass, isCached]
+                      (auto &&op, AsyncStatus status) {
         if (thisPtr) {
             if (status == AsyncStatus::Completed) {
                 auto servicesResult = op.GetResults();
                 if (servicesResult) {
-                    thisPtr->handleRfcommServices(servicesResult, address, btName, deviceClass);
+                    thisPtr->handleRfcommServices(servicesResult, address, btName,
+                                                  deviceClass, isCached);
                     return;
                 }
             }
@@ -559,7 +575,7 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleClassicDevice(const BluetoothDe
 // this is a callback - executes in a new thread
 void QWinRTBluetoothDeviceDiscoveryWorker::handleRfcommServices(
         const RfcommDeviceServicesResult &servicesResult, uint64_t address,
-        const QString &name, uint32_t classOfDeviceInt)
+        const QString &name, uint32_t classOfDeviceInt, bool isCached)
 {
     // need to perform the check even if some of the operations fails
     auto shared = shared_from_this();
@@ -591,7 +607,7 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleRfcommServices(
     QBluetoothDeviceInfo info(btAddress, name, classOfDeviceInt);
     info.setCoreConfigurations(QBluetoothDeviceInfo::BaseRateCoreConfiguration);
     info.setServiceUuids(uuids);
-    info.setCached(true);
+    info.setCached(isCached);
 
     QMetaObject::invokeMethod(this, "deviceFound", Qt::AutoConnection,
                               Q_ARG(QBluetoothDeviceInfo, info));
@@ -633,10 +649,23 @@ void QWinRTBluetoothDeviceDiscoveryWorker::getLowEnergyDeviceFromId(const winrt:
 // this is a callback - executes in a new thread
 void QWinRTBluetoothDeviceDiscoveryWorker::handleLowEnergyDevice(const BluetoothLEDevice &device)
 {
-    const uint64_t address = device.BluetoothAddress();
-    const std::wstring name { device.Name() }; // via operator std::wstring_view()
+    uint64_t address = 0;
+    if (!TRY(address = device.BluetoothAddress())) {
+        qCDebug(QT_BT_WINDOWS) << "Failed to read BluetoothAddress() for LE device";
+        invokeDecrementPendingDevicesCountAndCheckFinished(shared_from_this());
+        return;
+    }
+    const std::wstring name { SAFE(device.Name()) }; // via operator std::wstring_view()
     const QString btName = QString::fromStdWString(name);
-    const bool isPaired = device.DeviceInformation().Pairing().IsPaired();
+
+    const auto deviceInfo = SAFE(device.DeviceInformation());
+    if (!deviceInfo) {
+        qCDebug(QT_BT_WINDOWS) << "Failed to obtain DeviceInformation for LE device";
+        invokeDecrementPendingDevicesCountAndCheckFinished(shared_from_this());
+        return;
+    }
+
+    const bool isPaired = SAFE(deviceInfo.Pairing().IsPaired());
 
     m_leDevicesMutex.lock();
     const LEAdvertisingInfo adInfo = m_foundLEDevicesMap.value(address);
@@ -652,7 +681,17 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleLowEnergyDevice(const Bluetooth
         info.setManufacturerData(key, manufacturerData.value(key));
     for (QBluetoothUuid key : serviceData.keys())
         info.setServiceData(key, serviceData.value(key));
-    info.setCached(true);
+
+    // Now we need to figure out if the device is cached or not.
+    // Theoretically, we could use the "System.Devices.Aep.IsPresent"
+    // device property. However, in practice it's not reported, so
+    // let's try to do our best and estimate the value.
+    // If the device is paired, then Windows will always report it,
+    // no matter if it's actually present or not.
+    // So, treat paired devices as cached at first. If the device is
+    // actually available, we'll get an update (at least with a new
+    // rssi), and update the cache state at that point.
+    info.setCached(isPaired);
 
     // Use the services obtained from the advertisement data if the device is not paired
     if (!isPaired) {
@@ -660,11 +699,15 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleLowEnergyDevice(const Bluetooth
         invokeDecrementPendingDevicesCountAndCheckFinished(shared_from_this());
         invokeDeviceFoundWithDebug(info);
     } else {
-        auto asyncOp = device.GetGattServicesAsync();
+        auto asyncOp = SAFE(device.GetGattServicesAsync());
+        if (!asyncOp) {
+            invokeDecrementPendingDevicesCountAndCheckFinished(shared_from_this());
+            return;
+        }
         auto thisPtr = shared_from_this();
-        asyncOp.Completed([thisPtr, info](auto &&op, AsyncStatus status) mutable {
+        const bool ok = TRY(asyncOp.Completed([thisPtr, info](auto &&op, AsyncStatus status) mutable {
             if (status == AsyncStatus::Completed) {
-                auto servicesResult = op.GetResults();
+                auto servicesResult = SAFE(op.GetResults());
                 if (servicesResult) {
                     thisPtr->handleGattServices(servicesResult, info);
                     return;
@@ -673,7 +716,11 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleLowEnergyDevice(const Bluetooth
             // Failed to get services
             qCDebug(QT_BT_WINDOWS) << "Failed to get GATT services for device" << info.name();
             invokeDecrementPendingDevicesCountAndCheckFinished(thisPtr);
-        });
+        }));
+        if (!ok) {
+            invokeDecrementPendingDevicesCountAndCheckFinished(thisPtr);
+            return;
+        }
     }
 }
 
@@ -688,18 +735,22 @@ void QWinRTBluetoothDeviceDiscoveryWorker::handleGattServices(
     });
     Q_UNUSED(guard); // to suppress warning
 
-    const auto status = servicesResult.Status();
-    if (status == GattCommunicationStatus::Success) {
-        const auto services = servicesResult.Services();
-        QList<QBluetoothUuid> uuids;
-        for (const auto &service : services) {
-            const GUID uuid = fromWinRtGuid(service.Uuid());
-            uuids.append(QBluetoothUuid(uuid));
+    try {
+        const auto status = servicesResult.Status();
+        if (status == GattCommunicationStatus::Success) {
+            const auto services = servicesResult.Services();
+            QList<QBluetoothUuid> uuids;
+            for (const auto &service : services) {
+                const GUID uuid = fromWinRtGuid(service.Uuid());
+                uuids.append(QBluetoothUuid(uuid));
+            }
+            info.setServiceUuids(uuids);
+        } else {
+            qCWarning(QT_BT_WINDOWS) << "Obtaining LE services finished with status"
+                                     << static_cast<int>(status);
         }
-        info.setServiceUuids(uuids);
-    } else {
-        qCWarning(QT_BT_WINDOWS) << "Obtaining LE services finished with status"
-                                 << static_cast<int>(status);
+    } catch (winrt::hresult_error const &e) {
+        LOG_HRESULT(e.code()) << "/* handleGattServices */";
     }
     invokeDeviceFoundWithDebug(info);
 }
@@ -720,13 +771,13 @@ QBluetoothDeviceDiscoveryAgentPrivate::QBluetoothDeviceDiscoveryAgentPrivate(
         const QBluetoothAddress &deviceAdapter, QBluetoothDeviceDiscoveryAgent *parent)
     : q_ptr(parent), adapterAddress(deviceAdapter)
 {
-    mainThreadCoInit(this);
+    threadCoInit(this);
 }
 
 QBluetoothDeviceDiscoveryAgentPrivate::~QBluetoothDeviceDiscoveryAgentPrivate()
 {
     disconnectAndClearWorker();
-    mainThreadCoUninit(this);
+    threadCoUninit(this);
 }
 
 bool QBluetoothDeviceDiscoveryAgentPrivate::isActive() const
@@ -831,6 +882,9 @@ void QBluetoothDeviceDiscoveryAgentPrivate::updateDeviceData(const QBluetoothAdd
             if (fields.testFlag(QBluetoothDeviceInfo::Field::ServiceData))
                 for (QBluetoothUuid key : serviceData.keys())
                     iter->setServiceData(key, serviceData.value(key));
+            // We got some data, so the device is definitely available now.
+            // Update the cached state.
+            iter->setCached(false);
             emit q->deviceUpdated(*iter, fields);
             return;
         }

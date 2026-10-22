@@ -1,5 +1,6 @@
 // Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qapduutils_p.h"
 #include <QtCore/QtEndian>
@@ -23,12 +24,13 @@ QT_BEGIN_NAMESPACE
 */
 QResponseApdu::QResponseApdu(const QByteArray &response)
 {
-    if (response.size() < 2) {
+    const auto view = qToByteArrayViewIgnoringNull(response);
+    if (view.size() < 2) {
         m_status = Empty;
         m_data = response;
     } else {
-        const auto dataSize = response.size() - 2;
-        m_status = qFromBigEndian(qFromUnaligned<uint16_t>(response.constData() + dataSize));
+        const auto dataSize = view.size() - 2;
+        m_status = qFromBigEndian(qFromUnaligned<uint16_t>(view.data() + dataSize));
         m_data = response.left(dataSize);
     }
 }

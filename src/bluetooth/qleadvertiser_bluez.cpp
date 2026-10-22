@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:trusted-data
 
 #include "qleadvertiser_bluez_p.h"
 
@@ -274,7 +275,7 @@ void QLeAdvertiserBluez::setManufacturerData(const QLowEnergyAdvertisingData &sr
         return;
 
     const QByteArray manufacturerData = src.manufacturerData();
-    if (dest.length >= sizeof dest.data - 1 - 1 - 2 - manufacturerData.size()) {
+    if (qsizetype(sizeof dest.data) - dest.length < 1 + 1 + 2 + manufacturerData.size()) {
         qCWarning(QT_BT_BLUEZ) << "manufacturer data does not fit into advertising data packet";
         return;
     }
@@ -413,7 +414,10 @@ void QLeAdvertiserBluez::handleCommandCompleted(quint16 opCode, quint8 status,
     switch (ocf) {
     case QBluezConst::OcfLeReadTxPowerLevel:
         if (m_sendPowerLevel) {
-            m_powerLevel = data.at(0);
+            if (!data.isEmpty())
+                m_powerLevel = data.at(0);
+            else
+                m_powerLevel = 0;
             qCDebug(QT_BT_BLUEZ) << "TX power level is" << m_powerLevel;
         }
         queueAdvertisingCommands();
