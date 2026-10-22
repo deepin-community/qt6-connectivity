@@ -1,5 +1,6 @@
 // Copyright (C) 2017 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:trusted-data
 
 #include <QtCore/qloggingcategory.h>
 #include <QtCore/qsocketnotifier.h>
@@ -183,7 +184,8 @@ void BluetoothManagement::_q_readNotifier()
             break;
 
         const MgmtHdr *hdr = reinterpret_cast<const MgmtHdr*>(data.constData());
-        const auto nextPackageSize = qsizetype(qFromLittleEndian(hdr->length) + sizeof(MgmtHdr));
+        const size_t nextPackageDataSize = qFromLittleEndian(hdr->length);
+        const auto nextPackageSize = qsizetype(nextPackageDataSize + sizeof(MgmtHdr));
         const qsizetype remainingPackageSize = data.size() - nextPackageSize;
 
         if (data.size() < nextPackageSize)
@@ -192,18 +194,20 @@ void BluetoothManagement::_q_readNotifier()
         switch (static_cast<EventCode>(qFromLittleEndian(hdr->cmdCode))) {
         case EventCode::DeviceFoundEvent:
         {
-            const MgmtEventDeviceFound *event = reinterpret_cast<const MgmtEventDeviceFound*>
-                                                   (data.constData() + sizeof(MgmtHdr));
+            if (nextPackageDataSize >= sizeof(MgmtEventDeviceFound)) {
+                const MgmtEventDeviceFound *event = reinterpret_cast<const MgmtEventDeviceFound*>
+                                                       (data.constData() + sizeof(MgmtHdr));
 
-            if (event->type == BDADDR_LE_RANDOM) {
-                const bdaddr_t address = event->bdaddr;
-                quint64 bdaddr;
+                if (event->type == BDADDR_LE_RANDOM) {
+                    const bdaddr_t address = event->bdaddr;
+                    quint64 bdaddr;
 
-                convertAddress(address.b, &bdaddr);
-                const QBluetoothAddress qtAddress(bdaddr);
-                qCDebug(QT_BT_BLUEZ) << "BluetoothManagement: found random device"
-                                     << qtAddress;
-                processRandomAddressFlagInformation(qtAddress);
+                    convertAddress(address.b, &bdaddr);
+                    const QBluetoothAddress qtAddress(bdaddr);
+                    qCDebug(QT_BT_BLUEZ) << "BluetoothManagement: found random device"
+                                         << qtAddress;
+                    processRandomAddressFlagInformation(qtAddress);
+                }
             }
 
             break;

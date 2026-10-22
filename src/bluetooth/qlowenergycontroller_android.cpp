@@ -8,6 +8,7 @@
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QJniEnvironment>
 #include <QtCore/QJniObject>
+#include <QtCore/q26numeric.h>
 #include <QtBluetooth/QLowEnergyServiceData>
 #include <QtBluetooth/QLowEnergyCharacteristicData>
 #include <QtBluetooth/QLowEnergyDescriptorData>
@@ -219,9 +220,10 @@ void QLowEnergyControllerPrivateAndroid::writeCharacteristic(
         return;
 
     QJniEnvironment env;
+    const jsize nativeSize = q26::saturate_cast<jsize>(newValue.size());
     jbyteArray payload;
-    payload = env->NewByteArray(newValue.size());
-    env->SetByteArrayRegion(payload, 0, newValue.size(),
+    payload = env->NewByteArray(nativeSize);
+    env->SetByteArrayRegion(payload, 0, nativeSize,
                             (jbyte *)newValue.constData());
 
     bool result = false;
@@ -265,9 +267,10 @@ void QLowEnergyControllerPrivateAndroid::writeDescriptor(
     Q_ASSERT(!service.isNull());
 
     QJniEnvironment env;
+    const jsize nativeSize = q26::saturate_cast<jsize>(newValue.size());
     jbyteArray payload;
-    payload = env->NewByteArray(newValue.size());
-    env->SetByteArrayRegion(payload, 0, newValue.size(),
+    payload = env->NewByteArray(nativeSize);
+    env->SetByteArrayRegion(payload, 0, nativeSize,
                             (jbyte *)newValue.constData());
 
     bool result = false;
@@ -901,7 +904,7 @@ static QJniObject createJavaAdvertiseData(const QLowEnergyAdvertisingData &data)
 
     if (!data.manufacturerData().isEmpty()) {
         QJniEnvironment env;
-        const qint32 nativeSize = data.manufacturerData().size();
+        const jsize nativeSize = q26::saturate_cast<jsize>(data.manufacturerData().size());
         jbyteArray nativeData = env->NewByteArray(nativeSize);
         env->SetByteArrayRegion(nativeData, 0, nativeSize,
                                 reinterpret_cast<const jbyte*>(data.manufacturerData().constData()));
@@ -919,7 +922,7 @@ static QJniObject createJavaAdvertiseData(const QLowEnergyAdvertisingData &data)
           -> Android pairs rawData() per service uuid
     if (!data.rawData().isEmpty()) {
         QJniEnvironment env;
-        qint32 nativeSize = data.rawData().size();
+        const jsize nativeSize = q26::saturate_cast<jsize>(data.rawData().size());
         jbyteArray nativeData = env->NewByteArray(nativeSize);
         env->SetByteArrayRegion(nativeData, 0, nativeSize,
                                 reinterpret_cast<const jbyte*>(data.rawData().constData()));
@@ -937,31 +940,73 @@ static QJniObject createJavaAdvertiseData(const QLowEnergyAdvertisingData &data)
     return javaAdvertiseData;
 }
 
-static QJniObject createJavaAdvertiseSettings(const QLowEnergyAdvertisingParameters &params)
+static QJniObject createJavaAdvertisingSetParameters(const QLowEnergyAdvertisingParameters &params,
+                                                     const QJniObject &javaObj)
 {
-    QJniObject builder = QJniObject::construct<QtJniTypes::AdvertiseSettingsBuilder>();
+    QJniObject builder = QJniObject::construct<QtJniTypes::AdvertisingSetParametersBuilder>();
+
+    // TODO: Extended advertising support (see QTBUG-144522).
+    // We need a separate setting in the public API for it, because
+    // old BTLE devices will not be able to understand it.
+    // For now, always disable it!
+#if 0
+    const bool supportsExtendedAdvertising =
+            javaObj.callMethod<jboolean>("isLeExtendedAdvertisingSupported");
+    builder = builder.callMethod<QtJniTypes::AdvertisingSetParametersBuilder>(
+                    "setLegacyMode", !supportsExtendedAdvertising);
+#else
+    Q_UNUSED(javaObj);
+    builder = builder.callMethod<QtJniTypes::AdvertisingSetParametersBuilder>(
+                    "setLegacyMode", true);
+#endif
 
     bool connectable = false;
+    bool scannable = false;
     switch (params.mode())
     {
     case QLowEnergyAdvertisingParameters::AdvInd:
         connectable = true;
+        scannable = true; // TODO: if extended advertising is enabled, it must be false!
         break;
     case QLowEnergyAdvertisingParameters::AdvScanInd:
+        connectable = false;
+        scannable = true;
+        break;
     case QLowEnergyAdvertisingParameters::AdvNonConnInd:
         connectable = false;
+        scannable = false;
         break;
     // intentionally no default case
     }
-    builder = builder.callMethod<QtJniTypes::AdvertiseSettingsBuilder>(
-                      "setConnectable", connectable);
+    builder = builder.callMethod<QtJniTypes::AdvertisingSetParametersBuilder>(
+                    "setConnectable", connectable);
+    builder = builder.callMethod<QtJniTypes::AdvertisingSetParametersBuilder>(
+                    "setScannable", scannable);
 
-    /* TODO No Android API for further QLowEnergyAdvertisingParameters options
-     *      Android TxPowerLevel, AdvertiseMode and Timeout not mappable to Qt
-     */
+    // The QLowEnergyAdvertisingParameters struct contains the min and max
+    // interval values in milliseconds. However, the Android docs state
+    // the following:
+    // Bluetooth LE Advertising interval, in 0.625ms unit.
+    // Valid range is from 160 (100ms) to 16777215 (10,485.759375 s).
+    auto advertisingSetParametersObj =
+            QJniEnvironment().findClass<QtJniTypes::AdvertisingSetParameters>();
+    static const int minAdvInterval =
+            QJniObject::getStaticField<jint>(advertisingSetParametersObj, "INTERVAL_MIN");
+    static const int maxAdvInterval =
+            QJniObject::getStaticField<jint>(advertisingSetParametersObj, "INTERVAL_MAX");
 
-    QJniObject javaAdvertiseSettings = builder.callMethod<QtJniTypes::AdvertiseSettings>("build");
-    return javaAdvertiseSettings;
+    int desiredInterval = (params.minimumInterval() + params.maximumInterval()) / 2 / 0.625;
+    if (desiredInterval < minAdvInterval)
+        desiredInterval = minAdvInterval;
+    else if (desiredInterval > maxAdvInterval)
+        desiredInterval = maxAdvInterval;
+
+    builder = builder.callMethod<QtJniTypes::AdvertisingSetParametersBuilder>(
+                    "setInterval", desiredInterval);
+
+    QJniObject javaAdvertisingSetParameters =
+            builder.callMethod<QtJniTypes::AdvertisingSetParameters>("build");
+    return javaAdvertisingSetParameters;
 }
 
 
@@ -985,15 +1030,16 @@ void QLowEnergyControllerPrivateAndroid::startAdvertising(const QLowEnergyAdvert
         return;
     }
 
-    // Pass on advertisingData, scanResponse & AdvertiseSettings
+    // Pass on advertisingData, scanResponse & AdvertisingSetParameters
     QJniObject jAdvertiseData = createJavaAdvertiseData(advertisingData);
     QJniObject jScanResponse = createJavaAdvertiseData(scanResponseData);
-    QJniObject jAdvertiseSettings = createJavaAdvertiseSettings(params);
+    QJniObject jAdvertisingSetParameters =
+                    createJavaAdvertisingSetParameters(params, hub->javaObject());
 
     const bool result = hub->javaObject().callMethod<jboolean>("startAdvertising",
                         jAdvertiseData.object<QtJniTypes::AdvertiseData>(),
                         jScanResponse.object<QtJniTypes::AdvertiseData>(),
-                        jAdvertiseSettings.object<QtJniTypes::AdvertiseSettings>());
+                        jAdvertisingSetParameters.object<QtJniTypes::AdvertisingSetParameters>());
     if (!result) {
         setError(QLowEnergyController::AdvertisingError);
         setState(QLowEnergyController::UnconnectedState);
@@ -1214,8 +1260,9 @@ void QLowEnergyControllerPrivateAndroid::addToGenericAttributeList(const QLowEne
                            charData.maximumValueLength());
 
         QJniEnvironment env;
-        jbyteArray jb = env->NewByteArray(charData.value().size());
-        env->SetByteArrayRegion(jb, 0, charData.value().size(), (jbyte*)charData.value().data());
+        const jsize nativeCharSize = q26::saturate_cast<jsize>(charData.value().size());
+        jbyteArray jb = env->NewByteArray(nativeCharSize);
+        env->SetByteArrayRegion(jb, 0, nativeCharSize, (jbyte*)charData.value().data());
         jboolean success = javaChar.callMethod<jboolean>("setLocalValue", jb);
         if (!success)
             qCWarning(QT_BT_ANDROID) << "Cannot setup initial characteristic value for " << charData.uuid();
@@ -1227,8 +1274,9 @@ void QLowEnergyControllerPrivateAndroid::addToGenericAttributeList(const QLowEne
                                     javaUuidfromQtUuid(descData.uuid()).object<QtJniTypes::UUID>(),
                                     setupDescPermissions(descData));
 
-            jb = env->NewByteArray(descData.value().size());
-            env->SetByteArrayRegion(jb, 0, descData.value().size(), (jbyte*)descData.value().data());
+            const jsize nativeDescSize = q26::saturate_cast<jsize>(descData.value().size());
+            jb = env->NewByteArray(nativeDescSize);
+            env->SetByteArrayRegion(jb, 0, nativeDescSize, (jbyte*)descData.value().data());
             success = javaDesc.callMethod<jboolean>("setLocalValue", jb);
             if (!success) {
                 qCWarning(QT_BT_ANDROID) << "Cannot setup initial descriptor value for "

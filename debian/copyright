@@ -55,8 +55,7 @@ Files: src/nfc/ios/qiostagreaderdelegate.mm
 Copyright: 2017-2020 Governikus GmbH & Co. K
 License: LGPL-3 or GPL-2+
 
-Files: conanfile.py
-       config.tests/*
+Files: config.tests/*
        tests/*
 Copyright: 2016-2021 The Qt Company Ltd.
            2016 BlackBerry Limited (formerly Research In Motion)

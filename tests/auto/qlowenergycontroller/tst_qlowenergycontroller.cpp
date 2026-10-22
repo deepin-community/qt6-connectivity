@@ -102,7 +102,8 @@ tst_QLowEnergyController::tst_QLowEnergyController()
     const bool ciRun = qEnvironmentVariable("QTEST_ENVIRONMENT").split(' ').contains("ci");
     if (!ciRun && permissionStatus == Qt::PermissionStatus::Undetermined) {
         QTestEventLoop loop;
-        qApp->requestPermission(QBluetoothPermission{}, [this, &loop](const QPermission &permission){
+        qApp->requestPermission(QBluetoothPermission{},
+                                &loop, [this, &loop](const QPermission &permission) {
             permissionStatus = permission.status();
             loop.exitLoop();
         });
@@ -119,7 +120,7 @@ tst_QLowEnergyController::~tst_QLowEnergyController()
 
 void tst_QLowEnergyController::initTestCase()
 {
-#if !defined(Q_OS_MAC)
+#if !defined(Q_OS_APPLE)
     if (remoteDevice.isNull()
 #if !QT_CONFIG(winrt_bt)
         || QBluetoothLocalDevice::allDevices().isEmpty()) {
@@ -2672,7 +2673,7 @@ void tst_QLowEnergyController::tst_writeCharacteristicNoResponse()
     service->writeCharacteristic(imageIdentityChar, QByteArray::fromHex("1"));
     QTest::qWait(1000);
     QTRY_COMPARE_WITH_TIMEOUT(charChangedSpy.size(), 1, 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(charWrittenSpy.size(), 1, 5000);;
+    QTRY_COMPARE_WITH_TIMEOUT(charWrittenSpy.size(), 1, 5000);
 
     entry = charChangedSpy[0];
     first = entry[0].value<QLowEnergyCharacteristic>();

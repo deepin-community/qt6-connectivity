@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qleadvertiser_bluezdbus_p.h"
-#include "bluez/leadvertisement1_p.h"
+#include "bluez/leadvertisement1adaptor_p.h"
 #include "bluez/leadvertisingmanager1_p.h"
 #include "bluez/bluez5_helper_p.h"
 
@@ -14,6 +14,7 @@ QT_BEGIN_NAMESPACE
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
 using namespace Qt::StringLiterals;
+using namespace QtBluetoothPrivate; // for D-Bus wrappers
 
 // The advertisement dbus object path is freely definable, use as prefix
 static constexpr auto advObjectPathTemplate{"/qt/btle/advertisement/%1%2/%3"_L1};
@@ -49,7 +50,8 @@ QLeDBusAdvertiser::QLeDBusAdvertiser(const QLowEnergyAdvertisingParameters &para
     // Union of service UUIDs:
     if (scanResponseData.services() != advertisingData.services()) {
         QList<QBluetoothUuid> services = advertisingData.services();
-        for (const auto &service: scanResponseData.services()) {
+        const auto scanResponseServices = scanResponseData.services();
+        for (const auto &service : scanResponseServices) {
             if (!services.contains(service))
                 services.append(service);
         }
@@ -135,7 +137,8 @@ void QLeDBusAdvertiser::setAdvertisementDataForDBus()
     // Service UUIDs
     if (!m_advData.services().isEmpty()) {
         QStringList serviceUUIDList;
-        for (const auto& service: m_advData.services())
+        const auto services = m_advData.services();
+        for (const auto &service : services)
             serviceUUIDList << service.toString(QUuid::StringFormat::WithoutBraces);
         m_advDataDBus->setServiceUUIDs(serviceUUIDList);
     }

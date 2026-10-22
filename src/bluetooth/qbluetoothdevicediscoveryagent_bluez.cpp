@@ -21,6 +21,8 @@ QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
+using namespace QtBluetoothPrivate; // for D-Bus wrappers
+
 QBluetoothDeviceDiscoveryAgentPrivate::QBluetoothDeviceDiscoveryAgentPrivate(
     const QBluetoothAddress &deviceAdapter, QBluetoothDeviceDiscoveryAgent *parent) :
     adapterAddress(deviceAdapter),
@@ -245,17 +247,13 @@ static QBluetoothDeviceInfo createDeviceInfoFromBluez5Device(const QVariantMap& 
     }
 
     const ManufacturerDataList deviceManufacturerData = qdbus_cast<ManufacturerDataList>(properties[QStringLiteral("ManufacturerData")]);
-    const QList<quint16> keysManufacturer = deviceManufacturerData.keys();
-    for (quint16 key : keysManufacturer)
-        deviceInfo.setManufacturerData(
-                    key, deviceManufacturerData.value(key).variant().toByteArray());
+    for (const auto &[key, value] : deviceManufacturerData.asKeyValueRange())
+        deviceInfo.setManufacturerData(key, value.variant().toByteArray());
 
     const ServiceDataList deviceServiceData =
             qdbus_cast<ServiceDataList>(properties[QStringLiteral("ServiceData")]);
-    const QList<QString> keysService = deviceServiceData.keys();
-    for (QString key : keysService)
-        deviceInfo.setServiceData(QBluetoothUuid(key),
-                                  deviceServiceData.value(key).variant().toByteArray());
+    for (const auto &[key, value] : deviceServiceData.asKeyValueRange())
+        deviceInfo.setServiceData(QBluetoothUuid(key), value.variant().toByteArray());
 
     return deviceInfo;
 }

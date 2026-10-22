@@ -11,14 +11,14 @@ project(QtConnectivity
     LANGUAGES CXX C
 )
 
-find_package(Qt6 ${PROJECT_VERSION} CONFIG REQUIRED COMPONENTS BuildInternals Core Network)
-find_package(Qt6 ${PROJECT_VERSION} CONFIG OPTIONAL_COMPONENTS
-    DBus Gui Widgets Quick QuickControls2)
+find_package(Qt6 ${PROJECT_VERSION} CONFIG REQUIRED COMPONENTS BuildInternals)
+
+# This should be called as early as possible, just after find_package(BuildInternals) where it is
+# defined.
 qt_internal_project_setup()
 
-if(NOT TARGET Qt::Network)
-    message(NOTICE "Skipping the build as the condition \"TARGET Qt::Network\" is not met.")
-    return()
-endif()
+find_package(Qt6 ${PROJECT_VERSION} CONFIG REQUIRED COMPONENTS Core)
+find_package(Qt6 ${PROJECT_VERSION} QUIET CONFIG OPTIONAL_COMPONENTS
+    Network DBus Gui Widgets Quick QuickControls2)
 
 qt_build_repo()

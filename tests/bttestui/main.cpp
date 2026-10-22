@@ -14,6 +14,8 @@
 
 #include "btlocaldevice.h"
 
+using namespace Qt::StringLiterals;
+
 int main(int argc, char *argv[])
 {
     QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
@@ -24,7 +26,7 @@ int main(int argc, char *argv[])
     auto permissionStatus = app.checkPermission(QBluetoothPermission{});
     if (permissionStatus == Qt::PermissionStatus::Undetermined) {
         app.requestPermission(QBluetoothPermission{},
-                              [&permissionStatus](const QPermission &permission) {
+                              &app, [&permissionStatus](const QPermission &permission) {
             qApp->exit(); // Exit the permission request processing started below
             permissionStatus = permission.status();
         });
@@ -40,7 +42,7 @@ int main(int argc, char *argv[])
     qmlRegisterType<BtLocalDevice>("Local", 6, 5, "BluetoothDevice");
 
     QQuickView view;
-    view.setSource(QStringLiteral("qrc:///main.qml"));
+    view.setSource(QUrl{u"qrc:///main.qml"_s});
     view.setResizeMode(QQuickView::SizeRootObjectToView);
 
     QObject::connect(view.engine(), SIGNAL(quit()), qApp, SLOT(quit()));

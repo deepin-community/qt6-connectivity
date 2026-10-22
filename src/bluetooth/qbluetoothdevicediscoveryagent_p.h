@@ -36,12 +36,16 @@
 #if QT_CONFIG(bluez)
 #include "bluez/bluez5_helper_p.h"
 
+namespace QtBluetoothPrivate {
+
 class OrgBluezManagerInterface;
 class OrgBluezAdapterInterface;
 class OrgFreedesktopDBusObjectManagerInterface;
 class OrgFreedesktopDBusPropertiesInterface;
 class OrgBluezAdapter1Interface;
 class OrgBluezDevice1Interface;
+
+} // namespace QtBluetoothPrivate
 
 QT_BEGIN_NAMESPACE
 class QDBusVariant;
@@ -114,6 +118,7 @@ private slots:
 
 private:
     void startLowEnergyScan();
+    void processLeDiscoveryFinished(int epoch);
     void classicDiscoveryStartFail();
     bool setErrorIfPowerOff();
 
@@ -124,16 +129,17 @@ private:
     QTimer *leScanTimeout = nullptr;
     QTimer *deviceDiscoveryStartTimeout = nullptr;
     short deviceDiscoveryStartAttemptsLeft;
+    int leScanEpoch = 0;
 
     bool pendingCancel = false;
     bool pendingStart = false;
 #elif QT_CONFIG(bluez)
     bool pendingCancel = false;
     bool pendingStart = false;
-    OrgFreedesktopDBusObjectManagerInterface *manager = nullptr;
-    OrgBluezAdapter1Interface *adapter = nullptr;
+    QtBluetoothPrivate::OrgFreedesktopDBusObjectManagerInterface *manager = nullptr;
+    QtBluetoothPrivate::OrgBluezAdapter1Interface *adapter = nullptr;
     QTimer *discoveryTimer = nullptr;
-    QList<OrgFreedesktopDBusPropertiesInterface *> propertyMonitors;
+    QList<QtBluetoothPrivate::OrgFreedesktopDBusPropertiesInterface *> propertyMonitors;
 
     void deviceFound(const QString &devicePath, const QVariantMap &properties);
 

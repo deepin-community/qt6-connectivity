@@ -4,14 +4,16 @@
 #include "qnearfieldmanager_neard_p.h"
 #include "qnearfieldtarget_neard_p.h"
 
-#include "adapter_interface.h"
-#include "properties_interface.h"
-#include "objectmanager_interface.h"
+#include "adapter_interface_p.h"
+#include "properties_interface_p.h"
+#include "objectmanager_interface_p.h"
 
 QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_NFC_NEARD)
 Q_LOGGING_CATEGORY(QT_NFC_NEARD, "qt.nfc.neard")
+
+using namespace QtNfcPrivate; // for D-Bus wrappers
 
 // TODO We need a constructor that lets us select an adapter
 QNearFieldManagerPrivateImpl::QNearFieldManagerPrivateImpl()

@@ -14,6 +14,11 @@ QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT)
 
+/*!
+    \class QLowEnergyControllerPrivate
+    \inmodule QtBluetooth
+    \internal
+*/
 QLowEnergyControllerPrivate::QLowEnergyControllerPrivate()
     : QObject()
 {
@@ -114,9 +119,10 @@ QSharedPointer<QLowEnergyServicePrivate> QLowEnergyControllerPrivate::serviceFor
         currentList = localServices;
 
     const QList<QSharedPointer<QLowEnergyServicePrivate>> values = currentList.values();
-    for (auto service: values)
+    for (const auto &service: values) {
         if (service->startHandle <= handle && handle <= service->endHandle)
             return service;
+    }
 
     return QSharedPointer<QLowEnergyServicePrivate>();
 }
@@ -229,10 +235,10 @@ quint16 QLowEnergyControllerPrivate::updateValueOfDescriptor(
 
 void QLowEnergyControllerPrivate::invalidateServices()
 {
-    for (QSharedPointer<QLowEnergyServicePrivate> service : serviceList.values())
+    for (const QSharedPointer<QLowEnergyServicePrivate> &service : std::as_const(serviceList))
         service->setController(nullptr);
 
-    for (QSharedPointer<QLowEnergyServicePrivate> service : localServices.values())
+    for (const QSharedPointer<QLowEnergyServicePrivate> &service : std::as_const(localServices))
         service->setController(nullptr);
 
     serviceList.clear();

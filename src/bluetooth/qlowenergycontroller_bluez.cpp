@@ -1,6 +1,7 @@
 // Copyright (C) 2017 The Qt Company Ltd.
 // Copyright (C) 2016 Javier S. Pedro <maemo@javispedro.com>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "lecmaccalculator_p.h"
 #include "qlowenergycontroller_bluez_p.h"
@@ -61,6 +62,7 @@ QT_BEGIN_NAMESPACE
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_BLUEZ)
 
 using namespace QBluetooth;
+using namespace QtBluetoothPrivate; // for D-Bus wrappers
 
 const int maxPrepareQueueSize = 1024;
 
@@ -161,6 +163,11 @@ template<> void putDataAndIncrement(const QByteArray &value, char *&dst)
     dst += value.size();
 }
 
+/*!
+    \class QLowEnergyControllerPrivateBluez
+    \inmodule QtBluetooth
+    \internal
+*/
 QLowEnergyControllerPrivateBluez::QLowEnergyControllerPrivateBluez()
     : QLowEnergyControllerPrivate(),
       requestPending(false),
@@ -205,9 +212,7 @@ void QLowEnergyControllerPrivateBluez::init()
                         || (!remoteKey && role == QLowEnergyController::PeripheralRole)) {
                     return;
                 }
-                qCDebug(QT_BT_BLUEZ) << "received new signature resolving key"
-                                     << QByteArray(reinterpret_cast<const char *>(csrk.data),
-                                                   sizeof csrk).toHex();
+                qCDebug(QT_BT_BLUEZ) << "received new signature resolving key";
                 signingData.insert(remoteDevice.toUInt64(), SigningData(csrk));
         }
     );
@@ -444,7 +449,7 @@ void QLowEnergyControllerPrivateBluez::connectToDevice()
     // BlueZ 5.37+ (maybe even earlier versions) can have pending BTLE connections
     // Only one active L2CP socket to CID 0x4 possible at a time
 
-    QList<quint16> activeHandles = hciManager->activeLowEnergyConnections();
+    const QList<quint16> activeHandles = hciManager->activeLowEnergyConnections();
     if (!activeHandles.isEmpty()) {
         qCWarning(QT_BT_BLUEZ) << "Cannot connect due to pending active LE connections";
 
@@ -907,7 +912,7 @@ QLowEnergyHandle parseReadByTypeCharDiscovery(
     Q_ASSERT(charData);
     Q_ASSERT(data);
     Q_ASSERT(elementLength >= 5);
-    
+
     QLowEnergyHandle attributeHandle = bt_get_le16(&data[0]);
     charData->properties =
             (QLowEnergyCharacteristic::PropertyTypes)(data[2] & 0xff);
@@ -942,6 +947,11 @@ QLowEnergyHandle parseReadByTypeIncludeDiscovery(
     // interested in their relationship to each other
     // data[2] -> included service start handle
     // data[4] -> included service end handle
+
+    // TODO: Spec v. 5.3, Vol. 3, Part G, 4.5.1 mentions that only
+    // 16-bit UUID can be returned here. If the UUID is 128-bit,
+    // then it is omitted from the response, and should be requested
+    // separately with the ATT_READ_REQ command.
 
     if (elementLength == 8) //16 bit uuid
         foundServices->append(QBluetoothUuid(bt_get_le16(&data[6])));
@@ -989,12 +999,10 @@ void QLowEnergyControllerPrivateBluez::processReply(
         if (isErrorResponse) {
             mtuSize = ATT_DEFAULT_LE_MTU;
         } else {
-
             if (response.size() < 3) {
                 reportMalformedData(command, response);
                 break;
             }
-
             const char *data = response.constData();
             quint16 mtu = bt_get_le16(&data[1]);
             mtuSize = mtu;
@@ -1126,7 +1134,7 @@ void QLowEnergyControllerPrivateBluez::processReply(
             break;
         }
 
-        QLowEnergyHandle lastHandle;
+        QLowEnergyHandle lastHandle = 0;
         const quint16 elementLength = response.constData()[1];
         const quint16 numElements = (response.size() - 2) / elementLength;
         quint16 offset = 2;
@@ -1771,12 +1779,13 @@ void QLowEnergyControllerPrivateBluez::processUnsolicitedReply(const QByteArray 
     const auto command = static_cast<QBluezConst::AttCommand>(data[0]);
     bool isNotification = (command
                            == QBluezConst::AttCommand::ATT_OP_HANDLE_VAL_NOTIFICATION);
-    const QLowEnergyHandle changedHandle = bt_get_le16(&data[1]);
 
     if (payload.size() < 3) {
         reportMalformedData(command, payload);
         return;
     }
+
+    const QLowEnergyHandle changedHandle = bt_get_le16(&data[1]);
 
     if (QT_BT_BLUEZ().isDebugEnabled()) {
         if (isNotification)
@@ -3218,7 +3227,6 @@ void QLowEnergyControllerPrivateBluez::loadSigningDataIfNecessary(SigningKeyType
                                << keyString.size();
         return;
     }
-    qCDebug(QT_BT_BLUEZ) << "CSRK of peer device is" << keyString;
     const quint32 counter = settings.value(QLatin1String("Counter"), 0).toUInt();
     using namespace std;
     BluezUint128 csrk;

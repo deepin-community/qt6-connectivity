@@ -59,6 +59,22 @@ QT_BEGIN_NAMESPACE
     \value EditAction           Open for editing (open an SMS in the SMS editor, open the URI in a URI editor, open the telephone number for editing).
  */
 
+QNdefNfcSmartPosterRecordPrivate::~QNdefNfcSmartPosterRecordPrivate()
+{
+    cleanup();
+}
+
+void QNdefNfcSmartPosterRecordPrivate::cleanup()
+{
+    // Clean-up existing internal structure
+    m_titleList.clear();
+    delete m_uri;
+    delete m_action;
+    m_iconList.clear();
+    delete m_size;
+    delete m_type;
+}
+
 /*!
     Constructs a new empty smart poster.
 */
@@ -108,15 +124,8 @@ QNdefNfcSmartPosterRecord::~QNdefNfcSmartPosterRecord()
 
 void QNdefNfcSmartPosterRecord::cleanup()
 {
-    if (d) {
-        // Clean-up existing internal structure
-        d->m_titleList.clear();
-        if (d->m_uri) delete d->m_uri;
-        if (d->m_action) delete d->m_action;
-        d->m_iconList.clear();
-        if (d->m_size) delete d->m_size;
-        if (d->m_type) delete d->m_type;
-    }
+    if (d)
+        d->cleanup();
 }
 
 /*!
@@ -409,11 +418,7 @@ bool QNdefNfcSmartPosterRecord::removeTitle(const QString &locale)
  */
 void QNdefNfcSmartPosterRecord::setTitles(const QList<QNdefNfcTextRecord> &titles)
 {
-    d->m_titleList.clear();
-
-    for (qsizetype i = 0; i < titles.size(); ++i) {
-        d->m_titleList.append(titles[i]);
-    }
+    d->m_titleList = titles;
 
     // Convert to payload
     convertToPayload();
@@ -421,6 +426,9 @@ void QNdefNfcSmartPosterRecord::setTitles(const QList<QNdefNfcTextRecord> &title
 
 /*!
     Returns the URI from the smart poster's URI record if set. Otherwise an empty URI is returned.
+
+    \warning Application developers are advised to validate the returned
+    URI before acting on it. See \l{Qt NFC Security Considerations} for guidance.
  */
 QUrl QNdefNfcSmartPosterRecord::uri() const
 {
@@ -515,6 +523,9 @@ QNdefNfcIconRecord QNdefNfcSmartPosterRecord::iconRecord(qsizetype index) const
 /*!
     Returns the associated icon record data if the smart poster contains an icon record with MIME type \a mimetype.
     If \a mimetype is omitted or empty then the first icon's record data is returned. In all other cases, an empty array is returned.
+
+    \warning Application developers are advised to validate the returned data
+    before processing it. See \l{Qt NFC Security Considerations} for guidance.
  */
 QByteArray QNdefNfcSmartPosterRecord::icon(const QByteArray& mimetype) const
 {
@@ -633,11 +644,7 @@ bool QNdefNfcSmartPosterRecord::removeIcon(const QByteArray &type)
  */
 void QNdefNfcSmartPosterRecord::setIcons(const QList<QNdefNfcIconRecord> &icons)
 {
-    d->m_iconList.clear();
-
-    for (qsizetype i = 0; i < icons.size(); ++i) {
-        d->m_iconList.append(icons[i]);
-    }
+    d->m_iconList = icons;
 
     // Convert to payload
     convertToPayload();
@@ -740,6 +747,9 @@ void QNdefNfcIconRecord::setData(const QByteArray &data)
 
 /*!
     Returns the icon data as \l QByteArray.
+
+    \warning Application developers are advised to validate the returned data
+    before processing it. See \l{Qt NFC Security Considerations} for guidance.
 */
 QByteArray QNdefNfcIconRecord::data() const
 {

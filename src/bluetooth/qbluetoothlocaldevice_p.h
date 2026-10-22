@@ -27,10 +27,14 @@
 #include <QSet>
 #include "bluez/bluez5_helper_p.h"
 
+namespace QtBluetoothPrivate {
+
 class OrgBluezAdapter1Interface;
 class OrgFreedesktopDBusPropertiesInterface;
 class OrgFreedesktopDBusObjectManagerInterface;
 class OrgBluezDevice1Interface;
+
+} // namespace QtBluetoothPrivate
 
 QT_BEGIN_NAMESPACE
 class QDBusPendingCallWatcher;
@@ -106,17 +110,18 @@ public:
     ~QBluetoothLocalDevicePrivate();
 
     QSet<QBluetoothAddress> connectedDevicesSet;
-    OrgBluezAdapter1Interface *adapter = nullptr;
-    OrgFreedesktopDBusPropertiesInterface *adapterProperties = nullptr;
-    OrgFreedesktopDBusObjectManagerInterface *manager = nullptr;
-    QMap<QString, OrgFreedesktopDBusPropertiesInterface *> deviceChangeMonitors;
+    QtBluetoothPrivate::OrgBluezAdapter1Interface *adapter = nullptr;
+    QtBluetoothPrivate::OrgFreedesktopDBusPropertiesInterface *adapterProperties = nullptr;
+    QtBluetoothPrivate::OrgFreedesktopDBusObjectManagerInterface *manager = nullptr;
+    QMap<QString, QtBluetoothPrivate::OrgFreedesktopDBusPropertiesInterface *> deviceChangeMonitors;
 
     QList<QBluetoothAddress> connectedDevices() const;
+    bool isValid() const;
 
     QBluetoothAddress localAddress;
     QBluetoothAddress address;
     QBluetoothLocalDevice::Pairing pairing;
-    OrgBluezDevice1Interface *pairingTarget = nullptr;
+    QtBluetoothPrivate::OrgBluezDevice1Interface *pairingTarget = nullptr;
     QTimer *pairingDiscoveryTimer = nullptr;
     QBluetoothLocalDevice::HostMode currentMode;
     int pendingHostModeChange;
@@ -124,9 +129,6 @@ public:
 
 public slots:
     void pairingCompleted(QDBusPendingCallWatcher *);
-
-    bool isValid() const;
-
     void requestPairing(const QBluetoothAddress &address,
                         QBluetoothLocalDevice::Pairing targetPairing);
 
