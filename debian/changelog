@@ -1,3 +1,9 @@
+qt6-connectivity (6.8.0-0deepin8) unstable; urgency=medium
+
+  * Add CVE-2026-120973 security patches.
+
+ -- zhanghongyuan <zhanghongyuan@uniontech.com>  Tue, 10 Nov 2026 13:51:27 +0800
+
 qt6-connectivity (6.8.0-0deepin7) unstable; urgency=medium
 
   * fix CVE-2026-13326: QNdefNfcTextRecord out-of-bounds read in
