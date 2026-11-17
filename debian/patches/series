@@ -1,1 +1,7 @@
 fix-out-of-bounds-read-in-qndefnfctextrecord.patch
+# CVE-2026-120973 NDEF: fix parsing of empty chunks
+CVE-2026-120973_ndef-fix-parsing-of-empty-chunks.patch
+# CVE-2026-120973 NDEF: Do not accept unexpected Unchanged type name field
+CVE-2026-120973_ndef-do-not-accept-unexpected-unchanged-type-name-field.patch
+# CVE-2026-120973 QNdefRecord: fix construction from an empty record
+CVE-2026-120973_qndefrecord-fix-construction-from-an-empty-record.patch
